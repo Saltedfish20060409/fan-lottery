@@ -124,6 +124,8 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
         selected: boolean
         lowConfidence: boolean
         source: 'ocr'
+        rawName?: string
+        strippedSuffix?: string
       }> = []
       for (const page of ocrPages) {
         for (const box of page.boxes) {
@@ -131,8 +133,10 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
           items.push({
             name: box.text,
             selected: true,
-            lowConfidence: !box.suggested,
+            lowConfidence: !box.suggested || Boolean(box.strippedSuffix),
             source: 'ocr',
+            rawName: box.rawText !== box.text ? box.rawText : undefined,
+            strippedSuffix: box.strippedSuffix,
           })
         }
       }

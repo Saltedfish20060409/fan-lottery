@@ -76,7 +76,7 @@ export function Pick() {
       }
     >
       <p>
-        绿色是自动猜的昵称。点错的取消，漏了的点一下补上。评论正文一般不用选。
+        绿色是自动猜的昵称。点错的取消，漏了的点一下补上。下一页名单里还能改字、恢复被误删的原文。
       </p>
 
       <div className="picker-frame">
@@ -92,7 +92,11 @@ export function Pick() {
               type="button"
               className={`picker-box ${box.selected ? 'selected' : ''} ${box.suggested ? 'suggested' : ''}`}
               style={{ top, left, width, height }}
-              title={box.text}
+              title={
+                box.strippedSuffix
+                  ? `原文 ${box.rawText}（已去掉疑似等级「${box.strippedSuffix}」）`
+                  : box.text
+              }
               onClick={() => toggleOcrBox(page.id, box.id)}
             >
               <span>{box.text}</span>

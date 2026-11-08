@@ -63,12 +63,12 @@ export function getOcrMaxSide(): number {
   if (isMobile) score -= 2
   if (saveData || slowNet) score -= 2
 
-  // Prefer speed/stability over max fidelity
+  // Prefer speed/stability, but keep enough resolution for uncommon glyphs
   let maxSide: number
-  if (score <= 0) maxSide = 960
-  else if (score <= 2) maxSide = 1120
-  else if (score <= 4) maxSide = 1280
-  else maxSide = 1440
+  if (score <= 0) maxSide = 1120
+  else if (score <= 2) maxSide = 1280
+  else if (score <= 4) maxSide = 1440
+  else maxSide = 1600
 
   cachedMaxSide = maxSide
   return maxSide
@@ -128,15 +128,16 @@ export async function getOcr(
       const { PaddleOCR } = await import('@paddleocr/paddleocr-js')
       onProgress?.('正在初始化中文模型（首次较慢，请耐心等待）…')
 
+      // det 继续用 tiny 保体积；rec 用 small，字表更大，生僻字更稳
       const ocr = await PaddleOCR.create({
         lang: 'ch',
         textDetectionModelName: 'PP-OCRv6_tiny_det',
-        textRecognitionModelName: 'PP-OCRv6_tiny_rec',
+        textRecognitionModelName: 'PP-OCRv6_small_rec',
         textDetectionModelAsset: {
           url: publicUrl('models/PP-OCRv6_tiny_det_onnx_infer.tar'),
         },
         textRecognitionModelAsset: {
-          url: publicUrl('models/PP-OCRv6_tiny_rec_onnx_infer.tar'),
+          url: publicUrl('models/PP-OCRv6_small_rec_onnx_infer.tar'),
         },
         ortOptions: {
           backend: 'wasm',

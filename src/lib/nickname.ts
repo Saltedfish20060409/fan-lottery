@@ -4,7 +4,7 @@ const UI_PATTERNS: RegExp[] = [
   /^回复/,
   /^点赞$/,
   /^展开/,
-  /^收起/,
+  /^收起$/,
   /^作者$/,
   /^置顶$/,
   /^刚刚$/,
@@ -51,7 +51,7 @@ const UI_PATTERNS: RegExp[] = [
   /^米画师$/,
   /^APP$/,
   /^网页$/,
-  // 等级 / 会员 / 粉丝团徽章（单独成框时）
+  // 整框才是徽章/UI，不当昵称后缀去砍（避免误伤真昵称）
   /^Lv\.?\s*[0-6]$/i,
   /^LV\.?\s*[0-6]$/i,
   /^[lI|][vV]\.?\s*[0-6]$/,
@@ -66,7 +66,10 @@ const UI_PATTERNS: RegExp[] = [
   /^灯牌$/,
   /^博主$/,
   /^笔记作者$/,
-  // 等级图标被 OCR 拆成单独的怪字符（G/E/9/l6 等）
+  /^会员$/,
+  /^作者$/,
+  /^来了$/,
+  // 等级图标被 OCR 拆成单独怪字符
   /^[A-Za-z]$/,
   /^[A-Za-z][0-9]$/,
   /^[0-9][A-Za-z]$/,
@@ -75,6 +78,23 @@ const UI_PATTERNS: RegExp[] = [
 
 const MAX_NICK_LEN = 18
 const MIN_NICK_LEN = 2
+
+/**
+ * 仅剥离「几乎不可能是昵称故意结尾」的结构化徽章。
+ * 不碰：作者/博主/会员/来了/粉丝团 等可能出现在真昵称里的词。
+ */
+const STRUCTURED_BADGE_SUFFIXES: RegExp[] = [
+  /Lv\.?\s*[0-6]$/i,
+  /LV\.?\s*[0-6]$/i,
+  /[lI|][vV]\.?\s*[0-6]$/,
+  /等级[0-6]$/,
+  /UL\.?\s*\d{1,2}$/i,
+  /UP\.?\s*\d{1,2}$/i,
+  /年费大会员$/,
+  /大会员$/,
+  /硬核会员$/,
+  /VIP\d*$/i,
+]
 
 export interface OcrLine {
   text: string
@@ -87,6 +107,12 @@ export interface OcrLine {
 
 export interface OcrBox extends OcrLine {
   id: string
+  /** 展示/入选名单用（可能去掉疑似等级碎片） */
+  text: string
+  /** OCR 原文（空白规范化后） */
+  rawText: string
+  /** 若自动去掉了疑似等级碎片，这里是被去掉的那一段 */
+  strippedSuffix?: string
   suggested: boolean
   selected: boolean
 }
@@ -98,37 +124,12 @@ function isBadgeOcrJunk(suffix: string): boolean {
   )
 }
 
-/** Strip platform badges OCR often glues onto nicknames */
-function stripPlatformBadges(raw: string): string {
+function stripStructuredBadges(raw: string): string {
   let s = raw
-  const suffixPatterns: RegExp[] = [
-    // B站账号等级
-    /Lv\.?\s*[0-6]$/i,
-    /LV\.?\s*[0-6]$/i,
-    /[lI|][vV]\.?\s*[0-6]$/,
-    /等级[0-6]$/,
-    // B站直播等级
-    /UL\.?\s*\d{1,2}$/i,
-    /UP\.?\s*\d{1,2}$/i,
-    // 会员 / 认证类
-    /年费大会员$/,
-    /大会员$/,
-    /硬核会员$/,
-    /VIP\d*$/i,
-    /会员$/,
-    // 小红书
-    /作者$/,
-    /博主$/,
-    // 抖音直播粉丝团等
-    /粉丝团\d*$/,
-    /灯牌$/,
-    /来了$/,
-  ]
-
   let changed = true
   while (changed) {
     changed = false
-    for (const re of suffixPatterns) {
+    for (const re of STRUCTURED_BADGE_SUFFIXES) {
       const next = s.replace(re, '')
       if (next !== s && next.length >= MIN_NICK_LEN) {
         s = next
@@ -136,27 +137,66 @@ function stripPlatformBadges(raw: string): string {
       }
     }
   }
+  return s
+}
 
-  // 含中文昵称时：剥掉末尾 1～2 位被误读的等级碎片（9 / G / E / l6 …）
-  // 只剥「徽章像」的短后缀，保留「粉丝88」「小明2024」这类更长数字尾巴
+/**
+ * 尝试剥掉末尾 1～2 位「徽章误读」。
+ * 只在中文昵称 + 后缀像等级碎片时动手；不会动「粉丝88」「小明2024」。
+ */
+function stripTrailingOcrJunk(raw: string): {
+  text: string
+  strippedSuffix?: string
+} {
+  let s = raw
+  let stripped: string | undefined
+
   if (/[\u4e00-\u9fff]/.test(s)) {
     for (let i = 0; i < 3; i++) {
       const m = s.match(/^(.+[\u4e00-\u9fff])([A-Za-z0-9]{1,2})$/)
       if (!m || m[1]!.length < MIN_NICK_LEN) break
-      if (!isBadgeOcrJunk(m[2]!)) break
+      const suf = m[2]!
+      // 两位及以上纯数字更像昵称本身（88、66、2024 的尾段已由 {1,2} 限制）
+      if (/^\d{2}$/.test(suf)) break
+      if (!isBadgeOcrJunk(suf)) break
+      stripped = (stripped ?? '') + suf
       s = m[1]!
     }
   }
 
-  return s
+  return stripped ? { text: s, strippedSuffix: stripped } : { text: s }
 }
 
+function basicClean(raw: string): string {
+  return raw.replace(/\s+/g, '').replace(/[|丨｜]/g, '').trim()
+}
+
+/** 名单去重/粘贴用：只去结构化徽章，不去模糊碎片（避免误伤真昵称） */
 function normalizeName(raw: string): string {
-  const cleaned = raw
-    .replace(/\s+/g, '')
-    .replace(/[|丨｜]/g, '')
-    .trim()
-  return stripPlatformBadges(cleaned)
+  return stripStructuredBadges(basicClean(raw))
+}
+
+/**
+ * OCR 框展示用：结构化徽章必去；模糊碎片会去，但保留 rawText 可恢复。
+ */
+export function cleanOcrNickname(raw: string): {
+  text: string
+  rawText: string
+  strippedSuffix?: string
+} {
+  const rawText = basicClean(raw)
+  const structured = stripStructuredBadges(rawText)
+  const { text, strippedSuffix } = stripTrailingOcrJunk(structured)
+  return { text, rawText, strippedSuffix }
+}
+
+/** 末尾仍像等级误读时，名单页提示用户核对 */
+export function looksLikeTrailingBadgeJunk(name: string): boolean {
+  if (!/[\u4e00-\u9fff]/.test(name)) return false
+  const m = name.match(/([A-Za-z0-9]{1,2})$/)
+  if (!m) return false
+  if (/^\d{2}$/.test(m[1]!)) return false
+  return isBadgeOcrJunk(m[1]!)
 }
 
 function looksLikeUiChrome(text: string): boolean {
@@ -166,10 +206,12 @@ function looksLikeUiChrome(text: string): boolean {
 function looksLikeCommentBody(text: string): boolean {
   if (text.length > MAX_NICK_LEN) return true
   if (text.length > 12 && /[，。！？、,.!?;；：:…]/.test(text)) return true
-  if (/^(哈哈+|嘿嘿+|啊啊+|呜呜+|草+|好耶|冲了|冲鸭|支持|加油)/.test(text) && text.length >= 4) {
+  if (
+    /^(哈哈+|嘿嘿+|啊啊+|呜呜+|草+|好耶|冲了|冲鸭|支持|加油)/.test(text) &&
+    text.length >= 4
+  ) {
     return true
   }
-  // emoji-heavy / punctuation-only
   if (/^[\d\s\-_/\\.~·•★☆♥❤]+$/.test(text)) return true
   return false
 }
@@ -187,27 +229,27 @@ function isNicknameCandidate(text: string): boolean {
  *   [avatar] nickname ........ time/IP
  *            comment body...
  *            回复 / 赞
- *
- * Strategy: cluster boxes into vertical comment blocks, then score
- * short left-side lines at the top of each block as nicknames.
  */
 export function suggestNicknamesFromLayout(lines: OcrLine[]): Set<string> {
   if (!lines.length) return new Set()
 
   const usable = lines
-    .map((l) => ({ ...l, text: normalizeName(l.text) }))
+    .map((l) => {
+      const cleaned = cleanOcrNickname(l.text)
+      return { ...l, text: cleaned.text }
+    })
     .filter((l) => l.text && l.score >= 0.45)
     .sort((a, b) => a.minY - b.minY || a.minX - b.minX)
 
   if (!usable.length) return new Set()
 
-  // Estimate typical line height for clustering
-  const heights = usable.map((l) => Math.max(0.008, l.maxY - l.minY)).sort((a, b) => a - b)
+  const heights = usable
+    .map((l) => Math.max(0.008, l.maxY - l.minY))
+    .sort((a, b) => a - b)
   const medianH = heights[Math.floor(heights.length / 2)] ?? 0.03
   const rowGap = Math.max(0.018, medianH * 1.35)
   const blockGap = Math.max(0.035, medianH * 2.4)
 
-  // Cluster into comment blocks by vertical gaps
   const blocks: OcrLine[][] = []
   let current: OcrLine[] = []
   let prevBottom = -1
@@ -229,7 +271,6 @@ export function suggestNicknamesFromLayout(lines: OcrLine[]): Set<string> {
     if (pick) suggested.add(pick)
   }
 
-  // Fallback: if layout found almost nothing, use left-column short lines
   if (suggested.size === 0) {
     for (const line of usable) {
       if (!isNicknameCandidate(line.text)) continue
@@ -248,7 +289,6 @@ function pickNicknameFromBlock(block: OcrLine[], rowGap: number): string | null 
   const content = block.filter((l) => !looksLikeUiChrome(normalizeName(l.text)))
   if (!content.length) return null
 
-  // Top row of the block (nickname + time usually sit here)
   const topY = Math.min(...content.map((l) => l.minY))
   const topRow = content.filter((l) => l.minY <= topY + rowGap)
 
@@ -262,25 +302,20 @@ function pickNicknameFromBlock(block: OcrLine[], rowGap: number): string | null 
     const cx = (line.minX + line.maxX) / 2
     let score = 0
 
-    // Prefer short display names
     if (text.length <= 10) score += 3
     else if (text.length <= 14) score += 1
     else score -= 1
 
-    // After avatar, left half
     if (line.minX >= 0.08 && line.minX <= 0.42) score += 3
     else if (line.minX < 0.55) score += 1
 
-    // Not the right-side timestamp column
     if (cx > 0.62) score -= 4
     if (line.minX > 0.55) score -= 3
 
-    // Narrow box more like a name than a paragraph
     if (width < 0.28) score += 2
     else if (width < 0.4) score += 1
     else if (width > 0.55) score -= 3
 
-    // Having a longer line below in the same block strongly suggests this is the name row
     const below = content.some(
       (o) =>
         o.minY > line.maxY + 0.002 &&
@@ -289,13 +324,11 @@ function pickNicknameFromBlock(block: OcrLine[], rowGap: number): string | null 
     )
     if (below) score += 3
 
-    // OCR confidence
     score += line.score >= 0.8 ? 1 : 0
 
     if (!best || score > best.score) best = { text, score }
   }
 
-  // Also consider first left short line in whole block if top-row scoring weak
   if (!best || best.score < 3) {
     const leftShort = content
       .filter((l) => {
@@ -323,18 +356,20 @@ export function buildOcrBoxes(lines: OcrLine[]): OcrBox[] {
   const used = new Set<string>()
 
   return lines.map((line, i) => {
-    const text = normalizeName(line.text)
+    const cleaned = cleanOcrNickname(line.text)
+    const text = cleaned.text
     const canBeNick = isNicknameCandidate(text)
-    // Only first occurrence of a suggested name is pre-selected
-    const isSuggested = canBeNick && suggested.has(text) && !used.has(text.toLowerCase())
+    const isSuggested =
+      canBeNick && suggested.has(text) && !used.has(text.toLowerCase())
     if (isSuggested) used.add(text.toLowerCase())
 
     return {
       ...line,
-      text: text || line.text.trim(),
+      text: text || cleaned.rawText || line.text.trim(),
+      rawText: cleaned.rawText || line.text.trim(),
+      strippedSuffix: cleaned.strippedSuffix,
       id: `box-${i}-${text.slice(0, 8)}`,
       suggested: isSuggested,
-      // Pre-select layout suggestions; user can tap to fix
       selected: isSuggested,
     }
   })
@@ -366,6 +401,8 @@ export function mergeCandidates(
     selected: boolean
     lowConfidence: boolean
     source: Candidate['source']
+    rawName?: string
+    strippedSuffix?: string
   }>,
   artistNames: ArtistNames,
 ): Candidate[] {
@@ -389,6 +426,8 @@ export function mergeCandidates(
         count: prev.count + 1,
         selected: prev.selected || item.selected,
         lowConfidence: prev.lowConfidence && item.lowConfidence,
+        rawName: prev.rawName || item.rawName,
+        strippedSuffix: prev.strippedSuffix || item.strippedSuffix,
       })
     } else {
       map.set(key, {
@@ -398,6 +437,8 @@ export function mergeCandidates(
         lowConfidence: item.lowConfidence,
         source: item.source,
         count: 1,
+        rawName: item.rawName,
+        strippedSuffix: item.strippedSuffix,
       })
     }
   }

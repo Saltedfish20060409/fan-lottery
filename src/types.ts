@@ -13,6 +13,10 @@ export interface Candidate {
   lowConfidence: boolean
   source: 'ocr' | 'paste' | 'manual'
   count: number
+  /** OCR 清洗前原文；用于误剥后缀时一键恢复 */
+  rawName?: string
+  /** 自动去掉的疑似等级碎片（如 G / 9） */
+  strippedSuffix?: string
 }
 
 export interface LotteryRecord {

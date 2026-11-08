@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
+import { looksLikeTrailingBadgeJunk } from '../lib/nickname'
 import { useLottery } from '../store/LotteryContext'
 
 export function Review() {
@@ -45,7 +46,9 @@ export function Review() {
         </>
       }
     >
-      <p>最后再核对一遍：删掉不是昵称的、补上漏网的，确认后再开抽。</p>
+      <p>
+        最后再核对一遍：点名字就能改字。生僻字若识别错了，按截图改回即可；末尾若被当成等级图标误删，可点「恢复原文」。
+      </p>
 
       <div className="row">
         <span className="chip">已选 {pool.length}</span>
@@ -88,7 +91,7 @@ export function Review() {
               onChange={(e) => updateCandidate(c.id, { selected: e.target.checked })}
               aria-label={`选择 ${c.name}`}
             />
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <input
                 value={c.name}
                 onChange={(e) => updateCandidate(c.id, { name: e.target.value })}
@@ -104,7 +107,28 @@ export function Review() {
                 {c.lowConfidence ? '需确认 · ' : ''}
                 {c.source === 'ocr' ? '截图识别' : c.source === 'paste' ? '粘贴' : '手动'}
                 {c.count > 1 ? ` · 出现 ${c.count} 次` : ''}
+                {c.strippedSuffix
+                  ? ` · 已去掉疑似等级「${c.strippedSuffix}」`
+                  : looksLikeTrailingBadgeJunk(c.name)
+                    ? ' · 末尾字符可能是等级图标'
+                    : ''}
               </div>
+              {c.rawName && c.rawName !== c.name && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ minHeight: 32, padding: '4px 8px', marginTop: 4, fontSize: '0.8rem' }}
+                  onClick={() =>
+                    updateCandidate(c.id, {
+                      name: c.rawName!,
+                      strippedSuffix: undefined,
+                      lowConfidence: false,
+                    })
+                  }
+                >
+                  恢复原文「{c.rawName}」
+                </button>
+              )}
             </div>
             <button
               type="button"

@@ -20,7 +20,7 @@ export function Import() {
 
   useEffect(() => {
     let cancelled = false
-    setProgress('正在预加载识别引擎（首次约 1～3 分钟，可先截好图）…')
+    setProgress('正在预加载识别引擎（首次约 1～3 分钟，模型较大可先截好图）…')
     void preloadOcr((msg) => {
       if (!cancelled) setProgress(msg)
     })
