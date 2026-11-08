@@ -1,13 +1,11 @@
 """Fan-lottery OCR API — in-memory PaddleOCR, no disk persistence."""
 
-from __future__ import annotations
-
 import io
 import logging
 import os
 import threading
 import time
-from typing import Any
+from typing import Any, Dict, List
 
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -61,16 +59,16 @@ def get_ocr():
     with _ocr_lock:
         if _ocr is not None:
             return _ocr
-        log.info("Loading PaddleOCR PP-OCRv6_medium …")
+        log.info("Loading PaddleOCR models …")
         from paddleocr import PaddleOCR
 
-        # VPS ~3.6Gi：det 用 small 省内存；rec 用 medium 保生僻字
+        # paddlex 3.0.1 无 v6；默认 v5 server（可用环境变量覆盖）
         _ocr = PaddleOCR(
             text_detection_model_name=os.getenv(
-                "OCR_DET_MODEL", "PP-OCRv6_small_det"
+                "OCR_DET_MODEL", "PP-OCRv5_server_det"
             ),
             text_recognition_model_name=os.getenv(
-                "OCR_REC_MODEL", "PP-OCRv6_medium_rec"
+                "OCR_REC_MODEL", "PP-OCRv5_server_rec"
             ),
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
@@ -105,9 +103,9 @@ def decode_image(data: bytes) -> np.ndarray:
     return np.asarray(img)
 
 
-def extract_items(result: Any, width: int, height: int) -> list[dict[str, Any]]:
+def extract_items(result: Any, width: int, height: int) -> List[Dict[str, Any]]:
     """Normalize PaddleOCR 3.x predict() output into our JSON items."""
-    items: list[dict[str, Any]] = []
+    items: List[Dict[str, Any]] = []
     if not result:
         return items
 
@@ -174,7 +172,7 @@ def warmup():
     threading.Thread(target=_run, daemon=True).start()
 
 
-@app.post("/recognize")
+@app.post("/recognize", response_model=None)
 @limiter.limit(os.getenv("OCR_RATE_LIMIT", "20/minute"))
 async def recognize(request: Request, file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
