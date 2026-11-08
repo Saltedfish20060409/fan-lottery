@@ -3,8 +3,8 @@
   --art-canvas: #e8eaed;
   --bg0: #e8eaed;
   --bg1: #eef0f2;
-  --surface: rgba(255, 255, 255, 0.86);
-  --surface-solid: rgba(255, 255, 255, 0.94);
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-solid: rgba(255, 255, 255, 0.82);
   --ink: #1a2629;
   --muted: #5a6a6f;
   --accent: #21867a;
@@ -58,19 +58,19 @@ body {
   }
 }
 
-/* 电脑：竖图按高度铺满，两侧用同色灰延伸，避免拉伸变形 */
+/* 电脑：放大人物区域，可裁掉上下多余灰底 */
 @media (min-width: 1024px) {
   body {
-    background-size: auto 100%;
-    background-position: center bottom;
+    background-size: auto 138%;
+    background-position: center 82%;
   }
 }
 
-/* 超宽屏：避免人物过小，改为盖住高度并居中偏下 */
+/* 超宽屏：再放大一点，焦点锁在小人 */
 @media (min-width: 1440px) {
   body {
-    background-size: cover;
-    background-position: center 75%;
+    background-size: auto 155%;
+    background-position: center 80%;
   }
 }
 
@@ -151,10 +151,10 @@ a {
   color: inherit;
   padding: 8px 12px 8px 8px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.42);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .brand-mark {
@@ -187,10 +187,10 @@ a {
   animation: rise-in 0.4s ease 0.05s both;
   padding: 12px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.38);
 }
 
 @keyframes rise-in {
@@ -603,7 +603,7 @@ p {
   padding: 28px 22px !important;
   position: relative;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .home-hero::before {
@@ -680,7 +680,7 @@ p {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.5);
   border: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.92rem;
@@ -889,11 +889,11 @@ p {
 .stage-footer {
   text-align: center;
   padding: 18px 20px;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-radius: var(--radius);
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: var(--shadow);
   flex-shrink: 0;
 }
