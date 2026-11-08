@@ -31,8 +31,13 @@ export function Pick() {
     nav('/review')
   }
 
-  // Only show boxes that could plausibly be nicknames (hide long comment bodies)
-  const tappable = page.boxes.filter((b) => isNicknameCandidate(b.text) || b.selected)
+  // 默认只露出「像昵称」的左栏短框；正文类一律隐藏，减少误点
+  const tappable = page.boxes.filter((b) => {
+    if (b.selected || b.suggested) return true
+    if (!isNicknameCandidate(b.text)) return false
+    const w = b.maxX - b.minX
+    return b.minX < 0.48 && w < 0.4 && b.text.length <= 10
+  })
 
   return (
     <Layout
@@ -76,7 +81,7 @@ export function Pick() {
       }
     >
       <p>
-        绿色是自动猜的昵称。点错的取消，漏了的点一下补上。下一页名单里还能改字、恢复被误删的原文。
+        绿色是自动猜的昵称（已尽量避开评论正文）。点错取消，漏了点头像旁名字。下一页可改字；生僻字若缺字，对照截图手改即可。
       </p>
 
       <div className="picker-frame">

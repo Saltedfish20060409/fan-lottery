@@ -67,8 +67,9 @@ def get_ocr():
             text_detection_model_name=os.getenv(
                 "OCR_DET_MODEL", "PP-OCRv5_server_det"
             ),
+            # rec_doc 字表更大，生僻字更稳（paddlex 3.0.1 可用）
             text_recognition_model_name=os.getenv(
-                "OCR_REC_MODEL", "PP-OCRv5_server_rec"
+                "OCR_REC_MODEL", "PP-OCRv4_server_rec_doc"
             ),
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,

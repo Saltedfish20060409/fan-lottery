@@ -206,18 +206,28 @@ function looksLikeUiChrome(text: string): boolean {
 function looksLikeCommentBody(text: string): boolean {
   if (text.length > MAX_NICK_LEN) return true
   // Any sentence punctuation → almost certainly comment body
-  if (/[，。！？、,.!?;；：:…]/.test(text)) return true
+  if (/[，。！？、,.!?;；：:…!~～]/.test(text)) return true
   if (
-    /^(哈哈+|嘿嘿+|啊啊+|呜呜+|草+|好耶|冲了|冲鸭|支持|加油|谢谢|喜欢|求抽|蹲一个)/.test(
+    /^(哈哈+|嘿嘿+|啊啊+|呜呜+|草+|好耶|冲了|冲鸭|支持|加油|谢谢|喜欢|求抽|蹲一个|太强了|绝了|爱了|哭了|好看|好看捏|来了来了)/.test(
       text,
-    ) &&
-    text.length >= 3
+    )
   ) {
     return true
   }
+  // 口语短评：真的假的、太好看了、冲冲冲…
+  if (
+    /(真的|假的|好看|好看捏|喜欢|支持|加油|呜呜|哭了|太强|绝了|爱了|求抽|蹲一个|抽我|抽中|恭喜|期待|收到|码住|冲冲|哈哈哈|嘿嘿嘿)/.test(
+      text,
+    )
+  ) {
+    return true
+  }
+  // 句末语气助词（昵称很少以这些收尾）
+  if (text.length >= 3 && /[了啊呢吧呀哦嘛啦咯嘞欸]$/.test(text)) return true
+  if (/^(.)\1{2,}/.test(text)) return true // 哈哈哈 / 啊啊啊
   if (/^[\d\s\-_/\\.~·•★☆♥❤]+$/.test(text)) return true
   // Long-ish lines without looking like a compact handle
-  if (text.length >= 12) return true
+  if (text.length >= 10) return true
   return false
 }
 
@@ -292,25 +302,27 @@ function pickNicknameFromBlock(block: OcrLine[], rowGap: number): string | null 
   for (const line of topRow) {
     const text = normalizeName(line.text)
     if (!isNicknameCandidate(text)) continue
-    if (text.length > 12) continue
+    // 自动勾选只接受更短、更像昵称的行
+    if (text.length > 10) continue
 
     const width = line.maxX - line.minX
     const cx = (line.minX + line.maxX) / 2
     let score = 0
 
-    if (text.length <= 8) score += 3
-    else if (text.length <= 12) score += 1
+    if (text.length <= 6) score += 3
+    else if (text.length <= 10) score += 1
 
-    if (line.minX >= 0.08 && line.minX <= 0.42) score += 3
-    else if (line.minX < 0.5) score += 1
-    else score -= 2
+    // 昵称通常紧贴头像右侧：更苛刻的左区
+    if (line.minX >= 0.1 && line.minX <= 0.38) score += 4
+    else if (line.minX < 0.45) score += 1
+    else score -= 4
 
-    if (cx > 0.58) score -= 4
-    if (line.minX > 0.5) score -= 3
+    if (cx > 0.52) score -= 5
+    if (line.minX > 0.45) score -= 4
 
-    if (width < 0.28) score += 2
-    else if (width < 0.38) score += 1
-    else if (width > 0.5) score -= 4
+    if (width < 0.26) score += 2
+    else if (width < 0.36) score += 1
+    else if (width > 0.45) score -= 4
 
     const below = content.some(
       (o) =>
@@ -318,16 +330,17 @@ function pickNicknameFromBlock(block: OcrLine[], rowGap: number): string | null 
         normalizeName(o.text).length >= Math.max(4, text.length) &&
         !looksLikeUiChrome(normalizeName(o.text)),
     )
-    if (below) score += 4
-    else score -= 3
+    // 没有下方正文就不自动勾
+    if (!below) continue
+    score += 4
 
     score += line.score >= 0.85 ? 1 : 0
-    score += line.score < 0.7 ? -3 : 0
+    score += line.score < 0.75 ? -3 : 0
 
     if (!best || score > best.score) best = { text, score }
   }
 
-  return best && best.score >= 5 ? best.text : null
+  return best && best.score >= 7 ? best.text : null
 }
 
 /** Build tappable boxes with layout suggestions pre-selected */

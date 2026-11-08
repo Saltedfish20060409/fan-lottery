@@ -13,12 +13,15 @@
   --line: rgba(31, 42, 46, 0.08);
   --shadow: 0 12px 40px rgba(42, 157, 143, 0.12);
   --radius: 20px;
-  --font-display: 'ZCOOL KuaiLe', 'Noto Sans SC', sans-serif;
-  --font-body: 'Noto Sans SC', system-ui, sans-serif;
+  /* 系统中文字体优先：Google Fonts 子集常缺生僻字，会显示成空白 */
+  --font-display: 'ZCOOL KuaiLe', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Noto Sans SC', sans-serif;
+  --font-body: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC',
+    system-ui, sans-serif;
+  --font-cjk: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Source Han Sans SC',
+    'Noto Sans SC', 'Segoe UI', sans-serif;
   color: var(--ink);
   font-family: var(--font-body);
-  line-height: 1.5;
-  font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   background:
@@ -433,6 +436,7 @@ p {
 
 .picker-box span {
   display: block;
+  font-family: var(--font-cjk);
   font-size: 10px;
   line-height: 1.1;
   white-space: nowrap;
