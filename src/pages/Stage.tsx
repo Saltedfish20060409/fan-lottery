@@ -57,8 +57,13 @@ export function Stage() {
         </div>
         <div className="row">
           <Link className="btn btn-ghost" to="/draw">
-            退出投屏
+            返回抽奖页
           </Link>
+          {done && (
+            <Link className="btn btn-soft" to="/result">
+              查看结果
+            </Link>
+          )}
           <button
             type="button"
             className="btn btn-coral"

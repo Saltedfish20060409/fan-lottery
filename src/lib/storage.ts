@@ -17,7 +17,7 @@ function normalizeCandidate(c: Partial<Candidate> & { name: string }): Candidate
     lowConfidence: c.lowConfidence ?? false,
     source: c.source ?? 'manual',
     count,
-    weight: Math.max(1, c.weight ?? count),
+    weight: Math.max(1, c.weight ?? 1),
     sourcePlatform: (c.sourcePlatform as SourcePlatform | undefined) ?? 'unknown',
     rawName: c.rawName,
     strippedSuffix: c.strippedSuffix,

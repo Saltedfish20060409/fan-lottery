@@ -59,10 +59,53 @@ a {
   width: min(560px, 100%);
   margin: 0 auto;
   min-height: 100dvh;
-  padding: 16px 16px 40px;
+  padding: 16px 16px calc(40px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* 平板：略加宽，玩法卡片三列更舒服 */
+@media (min-width: 720px) {
+  .app-shell {
+    width: min(720px, 100%);
+    padding-top: 24px;
+    gap: 20px;
+  }
+
+  .mode-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .list {
+    max-height: 58vh;
+  }
+}
+
+/* 电脑：再宽一点，正文字号略升 */
+@media (min-width: 1024px) {
+  .app-shell {
+    width: min(880px, 100%);
+    padding-top: 28px;
+  }
+
+  .card {
+    padding: 22px 24px;
+  }
+
+  main.card h1 {
+    font-size: 1.85rem;
+  }
+
+  .mode-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .lottery-stage {
+    min-height: 320px;
+  }
 }
 
 .card {
@@ -471,10 +514,22 @@ p {
   min-height: 100dvh;
   width: min(960px, 100%);
   margin: 0 auto;
-  padding: 20px 20px 32px;
+  padding: 20px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+@media (min-width: 1024px) {
+  .stage-shell {
+    width: min(1100px, 100%);
+  }
+
+  .stage-main .lottery-stage {
+    transform: scale(1.35);
+  }
 }
 
 .stage-top {

@@ -13,6 +13,7 @@ export function Result() {
     pool,
     clearWinners,
     clearHistory,
+    removeRecord,
     resetAll,
     mode,
     artistNames,
@@ -75,9 +76,6 @@ export function Result() {
             onClick={() => void savePoster()}
           >
             {saving ? '生成中…' : '保存公示图'}
-          </button>
-          <button type="button" className="btn btn-soft btn-block" onClick={() => nav('/stage')}>
-            打开投屏大屏
           </button>
           {pool.length > 0 && (
             <button type="button" className="btn btn-soft btn-block" onClick={() => nav('/draw')}>
@@ -193,8 +191,8 @@ export function Result() {
               清空历史
             </button>
           </div>
-          {records.slice(0, 5).map((r) => (
-            <div key={r.id} className="list-item" style={{ gridTemplateColumns: '1fr' }}>
+          {records.slice(0, 8).map((r) => (
+            <div key={r.id} className="list-item" style={{ gridTemplateColumns: '1fr auto' }}>
               <div>
                 <strong>{r.winners.join('、')}</strong>
                 <div className="muted" style={{ fontSize: '0.8rem' }}>
@@ -202,6 +200,18 @@ export function Result() {
                   {r.drawId ?? '—'} · 池 {r.poolSize} 人
                 </div>
               </div>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ minHeight: 36, padding: '6px 10px' }}
+                onClick={() => {
+                  if (confirm(`删除这条历史？\n${r.winners.join('、')}`)) {
+                    removeRecord(r.id)
+                  }
+                }}
+              >
+                删
+              </button>
             </div>
           ))}
         </div>

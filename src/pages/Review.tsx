@@ -50,7 +50,12 @@ export function Review() {
       }
     >
       <p>
-        点名字可改字；权重默认=出现次数，可手动改。生僻字缺字请对照截图手改。
+        点名字可改字。生僻字缺字请对照截图手改。
+      </p>
+      <p className="muted" style={{ fontSize: '0.88rem' }}>
+        <strong style={{ color: 'var(--ink)' }}>权重</strong>
+        ：开启「按权重抽取」时，数字越大越容易被抽中。每人默认是 1（机会相同）；若某粉丝评论很多次想多给机会，可把权重改成
+        2、3…
       </p>
 
       <div className="row">
@@ -160,7 +165,7 @@ export function Review() {
                   type="number"
                   min={1}
                   max={999}
-                  value={c.weight ?? c.count ?? 1}
+                  value={c.weight ?? 1}
                   onChange={(e) =>
                     updateCandidate(c.id, {
                       weight: Math.max(1, Math.min(999, Math.floor(Number(e.target.value)) || 1)),

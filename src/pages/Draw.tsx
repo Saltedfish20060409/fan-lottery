@@ -89,6 +89,15 @@ export function Draw() {
               查看中奖结果
             </button>
           )}
+          {!spinning && (
+            <button
+              type="button"
+              className="btn btn-soft btn-block"
+              onClick={() => nav('/stage')}
+            >
+              投屏大屏（当前玩法：{MODE_LABELS[mode]}）
+            </button>
+          )}
           {records.length > 0 && !spinning && (
             <button
               type="button"
@@ -138,7 +147,7 @@ export function Draw() {
             disabled={spinning}
             onChange={(e) => setUseWeighting(e.target.checked)}
           />
-          <span>按权重抽取（名单页可改每人权重；默认=出现次数）</span>
+          <span>按权重抽取（默认每人权重 1，可在名单页改大以提高抽中概率）</span>
         </label>
       </div>
 

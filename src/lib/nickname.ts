@@ -473,7 +473,7 @@ export function mergeCandidates(
     map.set(key, {
       ...c,
       name: normalizeName(c.name),
-      weight: Math.max(1, c.weight ?? c.count ?? 1),
+      weight: Math.max(1, c.weight ?? 1),
       sourcePlatform: c.sourcePlatform ?? 'unknown',
     })
   }
@@ -487,12 +487,11 @@ export function mergeCandidates(
     const platform = item.sourcePlatform ?? 'unknown'
     if (prev) {
       const count = prev.count + 1
-      const weightFollowsCount = prev.weight === prev.count
       map.set(key, {
         ...prev,
         count,
-        // 未手动改过权重时，跟随出现次数
-        weight: weightFollowsCount ? count : prev.weight,
+        // 权重默认 1，只在用户手动改过时保留
+        weight: Math.max(1, prev.weight ?? 1),
         selected: prev.selected || item.selected,
         lowConfidence: prev.lowConfidence && item.lowConfidence,
         rawName: prev.rawName || item.rawName,
@@ -501,15 +500,14 @@ export function mergeCandidates(
           prev.sourcePlatform !== 'unknown' ? prev.sourcePlatform : platform,
       })
     } else {
-      const count = 1
       map.set(key, {
         id: makeId(name, item.source),
         name,
         selected: item.selected,
         lowConfidence: item.lowConfidence,
         source: item.source,
-        count,
-        weight: Math.max(1, item.weight ?? count),
+        count: 1,
+        weight: Math.max(1, item.weight ?? 1),
         sourcePlatform: platform,
         rawName: item.rawName,
         strippedSuffix: item.strippedSuffix,
@@ -536,7 +534,7 @@ export function selectedEntries(
 ): Array<{ name: string; weight: number }> {
   return candidates
     .filter((c) => c.selected)
-    .map((c) => ({ name: c.name, weight: Math.max(1, c.weight ?? c.count ?? 1) }))
+    .map((c) => ({ name: c.name, weight: Math.max(1, c.weight ?? 1) }))
 }
 
 export { normalizeName, isNicknameCandidate }

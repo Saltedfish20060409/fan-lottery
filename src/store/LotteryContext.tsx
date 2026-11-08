@@ -60,6 +60,7 @@ interface LotteryContextValue extends AppState {
   undoLastDraw: () => boolean
   clearWinners: () => void
   clearHistory: () => void
+  removeRecord: (id: string) => void
   resetAll: () => void
   pool: string[]
   /** 当前可抽池（已应用排除往期等过滤） */
@@ -337,6 +338,13 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, winners: [], records: [] }))
   }, [])
 
+  const removeRecord = useCallback((id: string) => {
+    setState((s) => ({
+      ...s,
+      records: s.records.filter((r) => r.id !== id),
+    }))
+  }, [])
+
   const resetAll = useCallback(() => {
     setOcrPages([])
     setState((s) => ({
@@ -378,6 +386,7 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       undoLastDraw,
       clearWinners,
       clearHistory,
+      removeRecord,
       resetAll,
       pool,
       drawPool,
@@ -408,6 +417,7 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       undoLastDraw,
       clearWinners,
       clearHistory,
+      removeRecord,
       resetAll,
       pool,
       drawPool,
