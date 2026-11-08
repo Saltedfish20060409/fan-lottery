@@ -910,3 +910,89 @@ p {
     padding: 24px 32px 28px;
   }
 }
+
+.announce-text-preview {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--line);
+  font-family: var(--font-cjk);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+}
+
+/* 公示图贴图编辑 */
+.sticker-editor {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+}
+
+.sticker-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #f4faf8;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sticker-base {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.sticker-item {
+  position: absolute;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+
+.sticker-item:active {
+  cursor: grabbing;
+}
+
+.sticker-item img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
+}
+
+.sticker-item.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+  z-index: 3;
+}
+
+.sticker-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.sticker-handle:active {
+  transform: scale(1.08);
+}

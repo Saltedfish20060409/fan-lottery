@@ -1,11 +1,33 @@
 import { MODE_LABELS, type ArtistNames, type LotteryMode, type LotteryRecord } from '../types'
 
+export type StickerPreset = 'sm' | 'md' | 'lg'
+
+/** 贴图在公示图上的布局（相对坐标 0～1） */
+export interface PosterSticker {
+  id: string
+  /** object URL 或 data URL */
+  src: string
+  /** 中心点 X（相对画布宽） */
+  x: number
+  /** 中心点 Y（相对画布高） */
+  y: number
+  /** 贴图宽度占画布宽的比例 */
+  widthRatio: number
+}
+
+export const STICKER_PRESET_RATIO: Record<StickerPreset, number> = {
+  sm: 0.16,
+  lg: 0.4,
+  md: 0.26,
+}
+
 export interface AnnouncePayload {
   artistNames: ArtistNames
   winners: string[]
   rules: string
   mode: LotteryMode
   latest?: LotteryRecord
+  stickers?: PosterSticker[]
 }
 
 export function artistDisplayName(names: ArtistNames): string {
@@ -33,12 +55,35 @@ export function buildAnnounceText(p: AnnouncePayload): string {
   return lines.join('\n')
 }
 
-/** Draw a shareable announcement poster onto a canvas. */
-export function renderAnnouncePoster(
+export function measureAnnouncePoster(p: AnnouncePayload): { width: number; height: number } {
+  const width = 720
+  const pad = 40
+  const winners = p.winners.length ? p.winners : ['（暂无）']
+  const lineH = 42
+  const titleH = 72
+  const subH = 36
+  const winnerBlock = winners.length * lineH + 24
+  const rulesH = 90
+  const footH = 70
+  const height = pad * 2 + titleH + subH * 3 + winnerBlock + rulesH + footH
+  return { width, height }
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('贴图加载失败'))
+    img.src = src
+  })
+}
+
+/** Draw a shareable announcement poster onto a canvas (含可选贴图). */
+export async function renderAnnouncePoster(
   canvas: HTMLCanvasElement,
   p: AnnouncePayload,
-): void {
-  const width = 720
+): Promise<void> {
+  const { width, height } = measureAnnouncePoster(p)
   const pad = 40
   const winners = p.winners.length ? p.winners : ['（暂无）']
   const lineH = 42
@@ -47,13 +92,6 @@ export function renderAnnouncePoster(
     ? new Date(p.latest.createdAt).toLocaleString()
     : new Date().toLocaleString()
   const drawId = p.latest?.drawId ?? '—'
-
-  const titleH = 72
-  const subH = 36
-  const winnerBlock = winners.length * lineH + 24
-  const rulesH = 90
-  const footH = 70
-  const height = pad * 2 + titleH + subH * 3 + winnerBlock + rulesH + footH
 
   canvas.width = width
   canvas.height = height
@@ -107,6 +145,21 @@ export function renderAnnouncePoster(
   ctx.fillStyle = '#2a9d8f'
   ctx.font = "500 15px 'PingFang SC', 'Microsoft YaHei', sans-serif"
   ctx.fillText('本机加密随机抽取 · 结果仅存于本机', pad + 28, height - pad - 18)
+
+  const stickers = p.stickers ?? []
+  for (const s of stickers) {
+    try {
+      const img = await loadImage(s.src)
+      const w = Math.max(24, width * s.widthRatio)
+      const aspect = img.naturalHeight / Math.max(1, img.naturalWidth)
+      const h = w * aspect
+      const dx = s.x * width - w / 2
+      const dy = s.y * height - h / 2
+      ctx.drawImage(img, dx, dy, w, h)
+    } catch {
+      // skip broken sticker
+    }
+  }
 }
 
 function fillRoundRect(
@@ -157,7 +210,7 @@ export async function downloadAnnouncePng(
   filename = 'fan-lottery-announce.png',
 ): Promise<void> {
   const canvas = document.createElement('canvas')
-  renderAnnouncePoster(canvas, p)
+  await renderAnnouncePoster(canvas, p)
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob((b) => resolve(b), 'image/png'),
   )
@@ -168,4 +221,32 @@ export async function downloadAnnouncePng(
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export function createStickerFromFile(
+  file: File,
+  preset: StickerPreset = 'md',
+): Promise<PosterSticker> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('请选择图片文件'))
+      return
+    }
+    const src = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      resolve({
+        id: `sticker-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        src,
+        x: 0.78,
+        y: 0.28,
+        widthRatio: STICKER_PRESET_RATIO[preset],
+      })
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(src)
+      reject(new Error('图片无法读取'))
+    }
+    img.src = src
+  })
 }

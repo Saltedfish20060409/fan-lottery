@@ -1,4 +1,5 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Announce } from './pages/Announce'
 import { Draw } from './pages/Draw'
 import { Home } from './pages/Home'
 import { Import } from './pages/Import'
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/review" element={<Review />} />
           <Route path="/draw" element={<Draw />} />
           <Route path="/result" element={<Result />} />
+          <Route path="/announce" element={<Announce />} />
           <Route path="/stage" element={<Stage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { buildAnnounceText, downloadAnnouncePng } from '../lib/announce'
+import { buildAnnounceText } from '../lib/announce'
 import { useLottery } from '../store/LotteryContext'
 import { MODE_LABELS } from '../types'
 
@@ -18,12 +18,9 @@ export function Result() {
     mode,
     artistNames,
     announceRules,
-    setAnnounceRules,
     undoLastDraw,
   } = useLottery()
   const [copied, setCopied] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [editingRules, setEditingRules] = useState(false)
 
   const latest = records[0]
   const payload = useMemo(
@@ -49,17 +46,6 @@ export function Result() {
     }
   }
 
-  const savePoster = async () => {
-    setSaving(true)
-    try {
-      await downloadAnnouncePng(payload)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '保存失败')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <Layout
       step={5}
@@ -72,10 +58,10 @@ export function Result() {
           <button
             type="button"
             className="btn btn-coral btn-block"
-            disabled={!winners.length || saving}
-            onClick={() => void savePoster()}
+            disabled={!winners.length}
+            onClick={() => nav('/announce')}
           >
-            {saving ? '生成中…' : '保存公示图'}
+            制作公示图
           </button>
           {pool.length > 0 && (
             <button type="button" className="btn btn-soft btn-block" onClick={() => nav('/draw')}>
@@ -130,32 +116,6 @@ export function Result() {
                   编号会写进公示文案，方便粉丝核对「是不是同一轮开奖」；日常可忽略。
                 </div>
               </div>
-            )}
-          </div>
-
-          <div className="field">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <label htmlFor="rules">活动规则（写入文案/公示图）</label>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ minHeight: 32, padding: '4px 8px', fontSize: '0.8rem' }}
-                onClick={() => setEditingRules((v) => !v)}
-              >
-                {editingRules ? '收起' : '编辑'}
-              </button>
-            </div>
-            {editingRules ? (
-              <textarea
-                id="rules"
-                rows={3}
-                value={announceRules}
-                onChange={(e) => setAnnounceRules(e.target.value)}
-              />
-            ) : (
-              <p className="muted" style={{ fontSize: '0.9rem', margin: 0 }}>
-                {announceRules}
-              </p>
             )}
           </div>
 
