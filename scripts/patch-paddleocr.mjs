@@ -18,14 +18,14 @@ const targets = [
 for (const file of targets) {
   let src = readFileSync(file, 'utf8')
   const before = src
-  // 60s -> 180s session create timeout
+  // 60s -> 180s session create timeout (det one-liner + rec multiline)
   src = src.replaceAll(
     'createSession(ort, modelBytes, providerCandidates), 6e4,',
     'createSession(ort, modelBytes, providerCandidates), 18e4,',
   )
   src = src.replaceAll(
-    'createSession(ort, modelBytes, providerCandidates), 6e4, "Detection model"',
-    'createSession(ort, modelBytes, providerCandidates), 18e4, "Detection model"',
+    'createSession(ort, modelBytes, providerCandidates),\n    6e4,',
+    'createSession(ort, modelBytes, providerCandidates),\n    18e4,',
   )
   // Faster first-load on mobile WASM
   src = src.replaceAll(
