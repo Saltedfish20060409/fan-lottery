@@ -1,13 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { isTappableOcrBox } from '../lib/nickname'
+import { guessPlatformFromTexts } from '../lib/platform'
+import { isAnyOcrTextBox, isTappableOcrBox } from '../lib/nickname'
 import { useLottery } from '../store/LotteryContext'
+import { PLATFORM_LABELS, type SourcePlatform } from '../types'
 
 export function Pick() {
   const nav = useNavigate()
-  const { ocrPages, toggleOcrBox, commitOcrSelection } = useLottery()
+  const { ocrPages, toggleOcrBox, commitOcrSelection, importPlatform, setImportPlatform } =
+    useLottery()
   const [pageIndex, setPageIndex] = useState(0)
+  const [showAll, setShowAll] = useState(false)
+  const [platformGuessed, setPlatformGuessed] = useState(false)
 
   const page = ocrPages[pageIndex]
 
@@ -18,6 +23,19 @@ export function Pick() {
 
   const pageSelected = page?.boxes.filter((b) => b.selected).length ?? 0
 
+  // 弱猜测：仅在仍是 unknown 时预填一次
+  useEffect(() => {
+    if (platformGuessed || !ocrPages.length) return
+    if (importPlatform !== 'unknown') {
+      setPlatformGuessed(true)
+      return
+    }
+    const texts = ocrPages.flatMap((p) => p.boxes.map((b) => b.rawText || b.text))
+    const guess = guessPlatformFromTexts(texts)
+    if (guess !== 'unknown') setImportPlatform(guess)
+    setPlatformGuessed(true)
+  }, [ocrPages, importPlatform, platformGuessed, setImportPlatform])
+
   if (!ocrPages.length) {
     return <Navigate to="/import" replace />
   }
@@ -27,12 +45,15 @@ export function Pick() {
   }
 
   const onConfirm = () => {
-    commitOcrSelection()
+    commitOcrSelection(importPlatform)
     nav('/review')
   }
 
-  // 布局优先：左栏可点选；英文长昵称允许更宽
-  const tappable = page.boxes.filter((b) => isTappableOcrBox(b))
+  const tappable = page.boxes.filter((b) => {
+    if (b.selected || b.suggested) return true
+    if (showAll) return isAnyOcrTextBox(b.text) || isAnyOcrTextBox(b.rawText)
+    return isTappableOcrBox(b)
+  })
 
   return (
     <Layout
@@ -76,8 +97,40 @@ export function Pick() {
       }
     >
       <p>
-        绿色是按位置自动猜的昵称。点错取消；漏了就点头像旁的名字（数字/字母昵称也可以）。下一页可改字。
+        绿色是按位置自动猜的昵称。点错取消；漏了就点头像旁的名字。可打开「显示全部文字框」找漏网的。
       </p>
+
+      <div className="row" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <label className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={(e) => setShowAll(e.target.checked)}
+          />
+          <span>显示全部文字框</span>
+        </label>
+        <label className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <span className="muted" style={{ fontSize: '0.9rem' }}>
+            本批平台
+          </span>
+          <select
+            value={importPlatform}
+            onChange={(e) => setImportPlatform(e.target.value as SourcePlatform)}
+            style={{
+              border: '1px solid var(--line)',
+              borderRadius: 12,
+              padding: '8px 10px',
+              background: '#fff',
+            }}
+          >
+            {(Object.keys(PLATFORM_LABELS) as SourcePlatform[]).map((k) => (
+              <option key={k} value={k}>
+                {PLATFORM_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <div className="picker-frame">
         <img src={page.imageUrl} alt={page.fileName} className="picker-image" draggable={false} />

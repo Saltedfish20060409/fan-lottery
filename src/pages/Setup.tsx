@@ -5,14 +5,23 @@ import { useLottery } from '../store/LotteryContext'
 
 export function Setup() {
   const nav = useNavigate()
-  const { artistNames, setArtistNames, drawCount, setDrawCount, refilterArtists } =
-    useLottery()
+  const {
+    artistNames,
+    setArtistNames,
+    drawCount,
+    setDrawCount,
+    refilterArtists,
+    announceRules,
+    setAnnounceRules,
+  } = useLottery()
   const [local, setLocal] = useState(artistNames)
   const [count, setCount] = useState(String(drawCount))
+  const [rules, setRules] = useState(announceRules)
 
   const onNext = () => {
     setArtistNames(local)
     setDrawCount(Number(count) || 1)
+    setAnnounceRules(rules)
     refilterArtists()
     nav('/import')
   }
@@ -66,6 +75,16 @@ export function Setup() {
           inputMode="numeric"
           value={count}
           onChange={(e) => setCount(e.target.value)}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor="rules">活动规则（会写进公示文案/图片）</label>
+        <textarea
+          id="rules"
+          rows={3}
+          value={rules}
+          onChange={(e) => setRules(e.target.value)}
+          placeholder="关注要求、兑奖方式等"
         />
       </div>
     </Layout>

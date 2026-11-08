@@ -6,6 +6,7 @@ import { Pick } from './pages/Pick'
 import { Result } from './pages/Result'
 import { Review } from './pages/Review'
 import { Setup } from './pages/Setup'
+import { Stage } from './pages/Stage'
 import { LotteryProvider } from './store/LotteryContext'
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/review" element={<Review />} />
           <Route path="/draw" element={<Draw />} />
           <Route path="/result" element={<Result />} />
+          <Route path="/stage" element={<Stage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>

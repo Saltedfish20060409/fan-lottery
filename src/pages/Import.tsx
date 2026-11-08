@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { preloadOcr, recognizePagesFromFiles } from '../lib/ocr'
 import { useLottery } from '../store/LotteryContext'
+import { PLATFORM_LABELS, type SourcePlatform } from '../types'
 
 export function Import() {
   const nav = useNavigate()
-  const { setOcrPages, addFromPaste, candidates, ocrPages } = useLottery()
+  const { setOcrPages, addFromPaste, candidates, ocrPages, importPlatform, setImportPlatform } =
+    useLottery()
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [engineReady, setEngineReady] = useState(false)
@@ -76,7 +78,7 @@ export function Import() {
 
   const onPasteAdd = () => {
     if (!paste.trim()) return
-    addFromPaste(paste)
+    addFromPaste(paste, importPlatform)
     setPaste('')
     nav('/review')
   }
@@ -111,6 +113,28 @@ export function Import() {
         </>
       }
     >
+      <div className="field">
+        <label htmlFor="plat">本批来自哪个平台？（整批标签，不用逐人标）</label>
+        <select
+          id="plat"
+          value={importPlatform}
+          onChange={(e) => setImportPlatform(e.target.value as SourcePlatform)}
+          style={{
+            border: '1px solid var(--line)',
+            borderRadius: 14,
+            padding: '12px 14px',
+            background: '#fff',
+            width: '100%',
+          }}
+        >
+          {(Object.keys(PLATFORM_LABELS) as SourcePlatform[]).map((k) => (
+            <option key={k} value={k}>
+              {PLATFORM_LABELS[k]}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div
         className="upload-zone"
         role="button"

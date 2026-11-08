@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { looksLikeTrailingBadgeJunk } from '../lib/nickname'
 import { useLottery } from '../store/LotteryContext'
+import { PLATFORM_LABELS, type SourcePlatform } from '../types'
 
 export function Review() {
   const nav = useNavigate()
@@ -11,6 +12,7 @@ export function Review() {
     updateCandidate,
     removeCandidate,
     setAllSelected,
+    setSelectedPlatform,
     clearCandidates,
     addManual,
     pool,
@@ -19,6 +21,7 @@ export function Review() {
     refilterArtists,
   } = useLottery()
   const [manual, setManual] = useState('')
+  const [batchPlatform, setBatchPlatform] = useState<SourcePlatform>('unknown')
 
   const onAdd = () => {
     if (!manual.trim()) return
@@ -47,14 +50,19 @@ export function Review() {
       }
     >
       <p>
-        最后再核对一遍：点名字就能改字。生僻字若显示成空白或缺字，请对照截图手改；末尾若被当成等级图标误删，可点「恢复原文」。
+        点名字可改字；权重默认=出现次数，可手动改。生僻字缺字请对照截图手改。
       </p>
 
       <div className="row">
         <span className="chip">已选 {pool.length}</span>
         <span className="chip">合计 {candidates.length}</span>
         {(artistNames.bilibili || artistNames.xiaohongshu || artistNames.douyin) && (
-          <button type="button" className="btn btn-ghost" style={{ minHeight: 36, padding: '6px 12px' }} onClick={refilterArtists}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ minHeight: 36, padding: '6px 12px' }}
+            onClick={refilterArtists}
+          >
             再排除本人
           </button>
         )}
@@ -76,6 +84,36 @@ export function Review() {
           }}
         >
           清空
+        </button>
+      </div>
+
+      <div className="row" style={{ alignItems: 'center' }}>
+        <span className="muted" style={{ fontSize: '0.9rem' }}>
+          已选项批量改平台
+        </span>
+        <select
+          value={batchPlatform}
+          onChange={(e) => setBatchPlatform(e.target.value as SourcePlatform)}
+          style={{
+            border: '1px solid var(--line)',
+            borderRadius: 12,
+            padding: '8px 10px',
+            background: '#fff',
+          }}
+        >
+          {(Object.keys(PLATFORM_LABELS) as SourcePlatform[]).map((k) => (
+            <option key={k} value={k}>
+              {PLATFORM_LABELS[k]}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="btn btn-soft"
+          style={{ minHeight: 40 }}
+          onClick={() => setSelectedPlatform(batchPlatform)}
+        >
+          应用到已选
         </button>
       </div>
 
@@ -106,12 +144,35 @@ export function Review() {
               <div className="muted" style={{ fontSize: '0.78rem' }}>
                 {c.lowConfidence ? '需确认 · ' : ''}
                 {c.source === 'ocr' ? '截图识别' : c.source === 'paste' ? '粘贴' : '手动'}
+                {` · ${PLATFORM_LABELS[c.sourcePlatform ?? 'unknown']}`}
                 {c.count > 1 ? ` · 出现 ${c.count} 次` : ''}
                 {c.strippedSuffix
                   ? ` · 已去掉疑似等级「${c.strippedSuffix}」`
                   : looksLikeTrailingBadgeJunk(c.name)
                     ? ' · 末尾字符可能是等级图标'
                     : ''}
+              </div>
+              <div className="row" style={{ alignItems: 'center', marginTop: 4, gap: 8 }}>
+                <label className="muted" style={{ fontSize: '0.8rem' }}>
+                  权重
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={c.weight ?? c.count ?? 1}
+                  onChange={(e) =>
+                    updateCandidate(c.id, {
+                      weight: Math.max(1, Math.min(999, Math.floor(Number(e.target.value)) || 1)),
+                    })
+                  }
+                  style={{
+                    width: 64,
+                    border: '1px solid var(--line)',
+                    borderRadius: 10,
+                    padding: '4px 8px',
+                  }}
+                />
               </div>
               {c.rawName && c.rawName !== c.name && (
                 <button

@@ -1,27 +1,42 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
+import { buildAnnounceText, downloadAnnouncePng } from '../lib/announce'
 import { useLottery } from '../store/LotteryContext'
 import { MODE_LABELS } from '../types'
 
 export function Result() {
   const nav = useNavigate()
-  const { winners, records, pool, clearWinners, clearHistory, resetAll, mode } =
-    useLottery()
+  const {
+    winners,
+    records,
+    pool,
+    clearWinners,
+    clearHistory,
+    resetAll,
+    mode,
+    artistNames,
+    announceRules,
+    setAnnounceRules,
+    undoLastDraw,
+  } = useLottery()
   const [copied, setCopied] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editingRules, setEditingRules] = useState(false)
 
   const latest = records[0]
-  const text = useMemo(() => {
-    const lines = [
-      '【粉丝橱窗抽奖结果】',
-      `时间：${latest ? new Date(latest.createdAt).toLocaleString() : new Date().toLocaleString()}`,
-      `方式：${MODE_LABELS[latest?.mode ?? mode]}`,
-      `中奖：${winners.join('、') || '（暂无）'}`,
-      '',
-      '兑奖请提供至少一个平台「已关注」截图，核对后开橱窗。',
-    ]
-    return lines.join('\n')
-  }, [winners, latest, mode])
+  const payload = useMemo(
+    () => ({
+      artistNames,
+      winners,
+      rules: announceRules,
+      mode,
+      latest,
+    }),
+    [artistNames, winners, announceRules, mode, latest],
+  )
+
+  const text = useMemo(() => buildAnnounceText(payload), [payload])
 
   const copy = async () => {
     try {
@@ -33,6 +48,17 @@ export function Result() {
     }
   }
 
+  const savePoster = async () => {
+    setSaving(true)
+    try {
+      await downloadAnnouncePng(payload)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <Layout
       step={5}
@@ -40,11 +66,35 @@ export function Result() {
       footer={
         <>
           <button type="button" className="btn btn-primary btn-block" onClick={() => void copy()}>
-            {copied ? '已复制' : '复制结果文案'}
+            {copied ? '已复制' : '复制公示文案'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-coral btn-block"
+            disabled={!winners.length || saving}
+            onClick={() => void savePoster()}
+          >
+            {saving ? '生成中…' : '保存公示图'}
+          </button>
+          <button type="button" className="btn btn-soft btn-block" onClick={() => nav('/stage')}>
+            打开投屏大屏
           </button>
           {pool.length > 0 && (
-            <button type="button" className="btn btn-coral btn-block" onClick={() => nav('/draw')}>
+            <button type="button" className="btn btn-soft btn-block" onClick={() => nav('/draw')}>
               继续补抽（池中还剩 {pool.length} 人）
+            </button>
+          )}
+          {records.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-block"
+              onClick={() => {
+                if (confirm('撤销上一抽？中奖名单和历史会回滚，候选人会重新勾选。')) {
+                  undoLastDraw()
+                }
+              }}
+            >
+              撤销上一抽
             </button>
           )}
           <button
@@ -75,6 +125,37 @@ export function Result() {
             <div className="name" style={{ fontSize: '1.5rem' }}>
               {winners.join('、')}
             </div>
+            {latest?.drawId && (
+              <div className="muted" style={{ marginTop: 8, fontSize: '0.85rem' }}>
+                开奖编号 {latest.drawId} · {MODE_LABELS[latest.mode]}
+              </div>
+            )}
+          </div>
+
+          <div className="field">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <label htmlFor="rules">活动规则（写入文案/公示图）</label>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ minHeight: 32, padding: '4px 8px', fontSize: '0.8rem' }}
+                onClick={() => setEditingRules((v) => !v)}
+              >
+                {editingRules ? '收起' : '编辑'}
+              </button>
+            </div>
+            {editingRules ? (
+              <textarea
+                id="rules"
+                rows={3}
+                value={announceRules}
+                onChange={(e) => setAnnounceRules(e.target.value)}
+              />
+            ) : (
+              <p className="muted" style={{ fontSize: '0.9rem', margin: 0 }}>
+                {announceRules}
+              </p>
+            )}
           </div>
 
           <h2 style={{ fontSize: '1.2rem', marginTop: 8 }}>兑奖清单</h2>
@@ -117,8 +198,8 @@ export function Result() {
               <div>
                 <strong>{r.winners.join('、')}</strong>
                 <div className="muted" style={{ fontSize: '0.8rem' }}>
-                  {new Date(r.createdAt).toLocaleString()} · {MODE_LABELS[r.mode]} · 池{' '}
-                  {r.poolSize} 人
+                  {new Date(r.createdAt).toLocaleString()} · {MODE_LABELS[r.mode]} ·{' '}
+                  {r.drawId ?? '—'} · 池 {r.poolSize} 人
                 </div>
               </div>
             </div>

@@ -32,3 +32,40 @@ export function pickWinners(pool: readonly string[], count: number): string[] {
   const n = Math.min(count, pool.length)
   return shuffle(pool).slice(0, n)
 }
+
+/** Weighted pick without replacement. weight <= 0 treated as 1. */
+export function pickWeightedWinners(
+  entries: readonly { name: string; weight: number }[],
+  count: number,
+): string[] {
+  if (!entries.length || count <= 0) return []
+  const bag = entries.map((e) => ({
+    name: e.name,
+    weight: Math.max(1, Math.floor(e.weight) || 1),
+  }))
+  const n = Math.min(count, bag.length)
+  const out: string[] = []
+  for (let k = 0; k < n; k++) {
+    const total = bag.reduce((s, e) => s + e.weight, 0)
+    let r = randomInt(total)
+    let idx = 0
+    for (let i = 0; i < bag.length; i++) {
+      r -= bag[i]!.weight
+      if (r < 0) {
+        idx = i
+        break
+      }
+    }
+    out.push(bag[idx]!.name)
+    bag.splice(idx, 1)
+  }
+  return out
+}
+
+/** Short public draw id, e.g. FL-8F3A2C */
+export function makeDrawId(): string {
+  const buf = new Uint8Array(3)
+  crypto.getRandomValues(buf)
+  const hex = [...buf].map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+  return `FL-${hex}`
+}

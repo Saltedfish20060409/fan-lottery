@@ -9,20 +9,22 @@ import {
   type ReactNode,
 } from 'react'
 import type { OcrPageResult } from '../lib/ocr'
-import { pickWinners } from '../lib/random'
+import { makeDrawId, pickWeightedWinners, pickWinners } from '../lib/random'
 import {
   isArtistName,
   mergeCandidates,
   parsePastedNames,
+  selectedEntries,
   selectedPool,
 } from '../lib/nickname'
-import { appendRecord, loadState, saveState } from '../lib/storage'
+import { appendRecord, loadState, pastWinnerSet, saveState } from '../lib/storage'
 import {
   type AppState,
   type ArtistNames,
   type Candidate,
   type LotteryMode,
   type LotteryRecord,
+  type SourcePlatform,
 } from '../types'
 
 interface LotteryContextValue extends AppState {
@@ -32,27 +34,36 @@ interface LotteryContextValue extends AppState {
   setArtistNames: (names: ArtistNames) => void
   setDrawCount: (n: number) => void
   setMode: (mode: LotteryMode) => void
+  setAnnounceRules: (rules: string) => void
+  setExcludePastWinners: (v: boolean) => void
+  setUseWeighting: (v: boolean) => void
+  setImportPlatform: (p: SourcePlatform) => void
   addFromOcr: (
     items: Array<{
       name: string
       selected: boolean
       lowConfidence: boolean
       source: 'ocr'
+      sourcePlatform?: SourcePlatform
     }>,
   ) => void
-  commitOcrSelection: () => number
-  addFromPaste: (text: string) => void
+  commitOcrSelection: (platform?: SourcePlatform) => number
+  addFromPaste: (text: string, platform?: SourcePlatform) => void
   addManual: (name: string) => void
   updateCandidate: (id: string, patch: Partial<Candidate>) => void
   removeCandidate: (id: string) => void
   setAllSelected: (selected: boolean) => void
+  setSelectedPlatform: (platform: SourcePlatform) => void
   clearCandidates: () => void
   refilterArtists: () => void
   runDraw: () => string[]
+  undoLastDraw: () => boolean
   clearWinners: () => void
   clearHistory: () => void
   resetAll: () => void
   pool: string[]
+  /** 当前可抽池（已应用排除往期等过滤） */
+  drawPool: string[]
 }
 
 const LotteryContext = createContext<LotteryContextValue | null>(null)
@@ -103,6 +114,22 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, mode }))
   }, [])
 
+  const setAnnounceRules = useCallback((announceRules: string) => {
+    setState((s) => ({ ...s, announceRules }))
+  }, [])
+
+  const setExcludePastWinners = useCallback((excludePastWinners: boolean) => {
+    setState((s) => ({ ...s, excludePastWinners }))
+  }, [])
+
+  const setUseWeighting = useCallback((useWeighting: boolean) => {
+    setState((s) => ({ ...s, useWeighting }))
+  }, [])
+
+  const setImportPlatform = useCallback((importPlatform: SourcePlatform) => {
+    setState((s) => ({ ...s, importPlatform }))
+  }, [])
+
   const addFromOcr = useCallback(
     (
       items: Array<{
@@ -110,6 +137,7 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
         selected: boolean
         lowConfidence: boolean
         source: 'ocr'
+        sourcePlatform?: SourcePlatform
       }>,
     ) => {
       setState((s) => ({
@@ -120,54 +148,64 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const commitOcrSelection = useCallback(() => {
-    let count = 0
-    setState((s) => {
-      const items: Array<{
-        name: string
-        selected: boolean
-        lowConfidence: boolean
-        source: 'ocr'
-        rawName?: string
-        strippedSuffix?: string
-      }> = []
-      for (const page of ocrPages) {
-        for (const box of page.boxes) {
-          if (!box.selected) continue
-          items.push({
-            name: box.text,
-            selected: true,
-            lowConfidence: !box.suggested || Boolean(box.strippedSuffix),
-            source: 'ocr',
-            rawName: box.rawText !== box.text ? box.rawText : undefined,
-            strippedSuffix: box.strippedSuffix,
-          })
+  const commitOcrSelection = useCallback(
+    (platform?: SourcePlatform) => {
+      let count = 0
+      const plat = platform ?? stateRef.current.importPlatform
+      setState((s) => {
+        const items: Array<{
+          name: string
+          selected: boolean
+          lowConfidence: boolean
+          source: 'ocr'
+          rawName?: string
+          strippedSuffix?: string
+          sourcePlatform: SourcePlatform
+        }> = []
+        for (const page of ocrPages) {
+          for (const box of page.boxes) {
+            if (!box.selected) continue
+            items.push({
+              name: box.text,
+              selected: true,
+              lowConfidence: !box.suggested || Boolean(box.strippedSuffix),
+              source: 'ocr',
+              rawName: box.rawText !== box.text ? box.rawText : undefined,
+              strippedSuffix: box.strippedSuffix,
+              sourcePlatform: plat,
+            })
+          }
         }
-      }
-      count = items.length
+        count = items.length
+        return {
+          ...s,
+          candidates: mergeCandidates(s.candidates, items, s.artistNames),
+        }
+      })
+      return count
+    },
+    [ocrPages],
+  )
+
+  const addFromPaste = useCallback((text: string, platform?: SourcePlatform) => {
+    const names = parsePastedNames(text)
+    setState((s) => {
+      const plat = platform ?? s.importPlatform
       return {
         ...s,
-        candidates: mergeCandidates(s.candidates, items, s.artistNames),
+        candidates: mergeCandidates(
+          s.candidates,
+          names.map((name) => ({
+            name,
+            selected: true,
+            lowConfidence: false,
+            source: 'paste' as const,
+            sourcePlatform: plat,
+          })),
+          s.artistNames,
+        ),
       }
     })
-    return count
-  }, [ocrPages])
-
-  const addFromPaste = useCallback((text: string) => {
-    const names = parsePastedNames(text)
-    setState((s) => ({
-      ...s,
-      candidates: mergeCandidates(
-        s.candidates,
-        names.map((name) => ({
-          name,
-          selected: true,
-          lowConfidence: false,
-          source: 'paste' as const,
-        })),
-        s.artistNames,
-      ),
-    }))
   }, [])
 
   const addManual = useCallback((name: string) => {
@@ -175,7 +213,15 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       ...s,
       candidates: mergeCandidates(
         s.candidates,
-        [{ name, selected: true, lowConfidence: false, source: 'manual' }],
+        [
+          {
+            name,
+            selected: true,
+            lowConfidence: false,
+            source: 'manual',
+            sourcePlatform: s.importPlatform,
+          },
+        ],
         s.artistNames,
       ),
     }))
@@ -202,6 +248,15 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const setSelectedPlatform = useCallback((platform: SourcePlatform) => {
+    setState((s) => ({
+      ...s,
+      candidates: s.candidates.map((c) =>
+        c.selected ? { ...c, sourcePlatform: platform } : c,
+      ),
+    }))
+  }, [])
+
   const clearCandidates = useCallback(() => {
     setState((s) => ({ ...s, candidates: [], winners: [] }))
   }, [])
@@ -213,20 +268,38 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const buildDrawPool = useCallback((s: AppState): string[] => {
+    let names = selectedPool(s.candidates).filter((n) => !s.winners.includes(n))
+    if (s.excludePastWinners) {
+      const past = pastWinnerSet(s.records)
+      names = names.filter((n) => !past.has(n.toLowerCase()))
+    }
+    return names
+  }, [])
+
   const runDraw = useCallback(() => {
-    // 必须在 setState 外抽签：React 19 下 updater 不一定同步执行，
-    // 以前在回调里赋值再 return，经常拿到 []，导致首点无动画、二点又抽一次。
     const s = stateRef.current
-    const pool = selectedPool(s.candidates).filter((n) => !s.winners.includes(n))
-    const winners = pickWinners(pool, s.drawCount)
+    const poolNames = buildDrawPool(s)
+    if (!poolNames.length) return []
+
+    let winners: string[]
+    if (s.useWeighting) {
+      const entries = selectedEntries(s.candidates).filter((e) =>
+        poolNames.includes(e.name),
+      )
+      winners = pickWeightedWinners(entries, s.drawCount)
+    } else {
+      winners = pickWinners(poolNames, s.drawCount)
+    }
     if (!winners.length) return []
 
     const record: LotteryRecord = {
       id: `${Date.now()}`,
+      drawId: makeDrawId(),
       createdAt: new Date().toISOString(),
       mode: s.mode,
       winners,
-      poolSize: pool.length,
+      poolSize: poolNames.length,
       drawCount: s.drawCount,
     }
     setState((prev) => ({
@@ -238,6 +311,22 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       ),
     }))
     return winners
+  }, [buildDrawPool])
+
+  const undoLastDraw = useCallback(() => {
+    const s = stateRef.current
+    const last = s.records[0]
+    if (!last) return false
+    const undone = new Set(last.winners)
+    setState((prev) => ({
+      ...prev,
+      records: prev.records.slice(1),
+      winners: prev.winners.filter((w) => !undone.has(w)),
+      candidates: prev.candidates.map((c) =>
+        undone.has(c.name) ? { ...c, selected: true } : c,
+      ),
+    }))
+    return true
   }, [])
 
   const clearWinners = useCallback(() => {
@@ -260,6 +349,7 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
   }, [setOcrPages])
 
   const pool = useMemo(() => selectedPool(state.candidates), [state.candidates])
+  const drawPool = useMemo(() => buildDrawPool(state), [state, buildDrawPool])
 
   const value = useMemo<LotteryContextValue>(
     () => ({
@@ -270,6 +360,10 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       setArtistNames,
       setDrawCount,
       setMode,
+      setAnnounceRules,
+      setExcludePastWinners,
+      setUseWeighting,
+      setImportPlatform,
       addFromOcr,
       commitOcrSelection,
       addFromPaste,
@@ -277,13 +371,16 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       updateCandidate,
       removeCandidate,
       setAllSelected,
+      setSelectedPlatform,
       clearCandidates,
       refilterArtists,
       runDraw,
+      undoLastDraw,
       clearWinners,
       clearHistory,
       resetAll,
       pool,
+      drawPool,
     }),
     [
       state,
@@ -293,6 +390,10 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       setArtistNames,
       setDrawCount,
       setMode,
+      setAnnounceRules,
+      setExcludePastWinners,
+      setUseWeighting,
+      setImportPlatform,
       addFromOcr,
       commitOcrSelection,
       addFromPaste,
@@ -300,13 +401,16 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       updateCandidate,
       removeCandidate,
       setAllSelected,
+      setSelectedPlatform,
       clearCandidates,
       refilterArtists,
       runDraw,
+      undoLastDraw,
       clearWinners,
       clearHistory,
       resetAll,
       pool,
+      drawPool,
     ],
   )
 

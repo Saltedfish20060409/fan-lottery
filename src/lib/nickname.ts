@@ -1,4 +1,4 @@
-import type { ArtistNames, Candidate } from '../types'
+import type { ArtistNames, Candidate, SourcePlatform } from '../types'
 
 /**
  * 整框 UI / 平台控件：整段匹配才排除。
@@ -252,6 +252,14 @@ function isNicknameCandidate(text: string): boolean {
   return true
 }
 
+/** 「显示全部文字框」：不做布局过滤，只挡空串和平台 UI */
+export function isAnyOcrTextBox(text: string): boolean {
+  const name = normalizeName(text) || text.replace(/\s+/g, '').trim()
+  if (!name) return false
+  if (looksLikeUiChrome(normalizeName(text) || name)) return false
+  return true
+}
+
 /** 点选页默认露出哪些框：英文昵称允许更宽更长 */
 export function isTappableOcrBox(box: {
   text: string
@@ -452,6 +460,8 @@ export function mergeCandidates(
     source: Candidate['source']
     rawName?: string
     strippedSuffix?: string
+    sourcePlatform?: SourcePlatform
+    weight?: number
   }>,
   artistNames: ArtistNames,
 ): Candidate[] {
@@ -460,7 +470,12 @@ export function mergeCandidates(
   for (const c of existing) {
     const key = normalizeName(c.name).toLowerCase()
     if (!key) continue
-    map.set(key, { ...c, name: normalizeName(c.name) })
+    map.set(key, {
+      ...c,
+      name: normalizeName(c.name),
+      weight: Math.max(1, c.weight ?? c.count ?? 1),
+      sourcePlatform: c.sourcePlatform ?? 'unknown',
+    })
   }
 
   for (const item of incoming) {
@@ -469,23 +484,33 @@ export function mergeCandidates(
     if (isArtistName(name, artistNames)) continue
     const key = name.toLowerCase()
     const prev = map.get(key)
+    const platform = item.sourcePlatform ?? 'unknown'
     if (prev) {
+      const count = prev.count + 1
+      const weightFollowsCount = prev.weight === prev.count
       map.set(key, {
         ...prev,
-        count: prev.count + 1,
+        count,
+        // 未手动改过权重时，跟随出现次数
+        weight: weightFollowsCount ? count : prev.weight,
         selected: prev.selected || item.selected,
         lowConfidence: prev.lowConfidence && item.lowConfidence,
         rawName: prev.rawName || item.rawName,
         strippedSuffix: prev.strippedSuffix || item.strippedSuffix,
+        sourcePlatform:
+          prev.sourcePlatform !== 'unknown' ? prev.sourcePlatform : platform,
       })
     } else {
+      const count = 1
       map.set(key, {
         id: makeId(name, item.source),
         name,
         selected: item.selected,
         lowConfidence: item.lowConfidence,
         source: item.source,
-        count: 1,
+        count,
+        weight: Math.max(1, item.weight ?? count),
+        sourcePlatform: platform,
         rawName: item.rawName,
         strippedSuffix: item.strippedSuffix,
       })
@@ -504,6 +529,14 @@ export function parsePastedNames(text: string): string[] {
 
 export function selectedPool(candidates: Candidate[]): string[] {
   return candidates.filter((c) => c.selected).map((c) => c.name)
+}
+
+export function selectedEntries(
+  candidates: Candidate[],
+): Array<{ name: string; weight: number }> {
+  return candidates
+    .filter((c) => c.selected)
+    .map((c) => ({ name: c.name, weight: Math.max(1, c.weight ?? c.count ?? 1) }))
 }
 
 export { normalizeName, isNicknameCandidate }

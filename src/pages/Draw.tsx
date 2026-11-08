@@ -13,16 +13,31 @@ const MODES: LotteryMode[] = ['roulette', 'gacha', 'slot', 'cards', 'lots']
 
 export function Draw() {
   const nav = useNavigate()
-  const { mode, setMode, pool, drawCount, runDraw, winners } = useLottery()
+  const {
+    mode,
+    setMode,
+    pool,
+    drawPool,
+    drawCount,
+    runDraw,
+    winners,
+    excludePastWinners,
+    setExcludePastWinners,
+    useWeighting,
+    setUseWeighting,
+    undoLastDraw,
+    records,
+  } = useLottery()
   const [spinning, setSpinning] = useState(false)
   const [roundWinners, setRoundWinners] = useState<string[]>([])
   const [stagePool, setStagePool] = useState<string[]>([])
   const [done, setDone] = useState(false)
   const spinTimer = useRef<number | null>(null)
 
-  const available = pool.filter((n) => !winners.includes(n))
+  const available = drawPool
   const displayPool = stagePool.length ? stagePool : available.length ? available : pool
   const canDraw = available.length > 0 && !spinning
+  const excludedCount = Math.max(0, pool.filter((n) => !winners.includes(n)).length - available.length)
 
   useEffect(() => {
     return () => {
@@ -74,6 +89,23 @@ export function Draw() {
               查看中奖结果
             </button>
           )}
+          {records.length > 0 && !spinning && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-block"
+              onClick={() => {
+                if (confirm('撤销上一抽？')) {
+                  if (undoLastDraw()) {
+                    setDone(false)
+                    setRoundWinners([])
+                    setStagePool([])
+                  }
+                }
+              }}
+            >
+              撤销上一抽
+            </button>
+          )}
           <button type="button" className="btn btn-ghost btn-block" onClick={() => nav('/review')}>
             返回核对名单
           </button>
@@ -83,6 +115,32 @@ export function Draw() {
       <p>
         本次计划抽取 <strong>{drawCount}</strong> 人。底层都是公平随机，只是动画不同。
       </p>
+
+      <div className="stack" style={{ gap: 10 }}>
+        <label className="row" style={{ alignItems: 'center', gap: 10 }}>
+          <input
+            type="checkbox"
+            checked={excludePastWinners}
+            disabled={spinning}
+            onChange={(e) => setExcludePastWinners(e.target.checked)}
+          />
+          <span>
+            不抽本机历史已中过的人
+            {excludePastWinners && excludedCount > 0 ? (
+              <span className="muted">（已排除 {excludedCount} 人）</span>
+            ) : null}
+          </span>
+        </label>
+        <label className="row" style={{ alignItems: 'center', gap: 10 }}>
+          <input
+            type="checkbox"
+            checked={useWeighting}
+            disabled={spinning}
+            onChange={(e) => setUseWeighting(e.target.checked)}
+          />
+          <span>按权重抽取（名单页可改每人权重；默认=出现次数）</span>
+        </label>
+      </div>
 
       <div className="mode-grid">
         {MODES.map((m) => (
