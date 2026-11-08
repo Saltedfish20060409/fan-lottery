@@ -22,7 +22,8 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("fan-lottery-ocr")
 
 MAX_BYTES = int(os.getenv("OCR_MAX_BYTES", str(8 * 1024 * 1024)))
-MAX_SIDE = int(os.getenv("OCR_MAX_SIDE", "2048"))
+# 评论截图不需要 2K；更小边长对 CPU 推理提速很明显
+MAX_SIDE = int(os.getenv("OCR_MAX_SIDE", "1440"))
 ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv(
@@ -62,19 +63,17 @@ def get_ocr():
         log.info("Loading PaddleOCR models …")
         from paddleocr import PaddleOCR
 
-        # paddlex 3.0.1 无 v6；默认 v5 server（可用环境变量覆盖）
+        # CPU 机器：det 用 mobile 提速；rec 仍用 rec_doc 保生僻字
         _ocr = PaddleOCR(
             text_detection_model_name=os.getenv(
-                "OCR_DET_MODEL", "PP-OCRv5_server_det"
+                "OCR_DET_MODEL", "PP-OCRv5_mobile_det"
             ),
-            # rec_doc 字表更大，生僻字更稳（paddlex 3.0.1 可用）
             text_recognition_model_name=os.getenv(
                 "OCR_REC_MODEL", "PP-OCRv4_server_rec_doc"
             ),
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
-            # Slightly stricter boxes → less nickname+badge glue
             text_det_box_thresh=0.65,
             text_det_unclip_ratio=1.4,
             text_det_thresh=0.3,

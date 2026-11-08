@@ -27,7 +27,9 @@ type ServerOcrResponse = {
 
 const DEFAULT_API = 'https://vnscriptstudio.cn/fan-lottery-ocr'
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
-const CLIENT_MAX_SIDE = 2048
+/** 评论截图缩到这个边长足够认昵称，显著减少上传与 CPU OCR 时间 */
+const CLIENT_MAX_SIDE = 1440
+const JPEG_QUALITY = 0.85
 
 function apiBase(): string {
   const raw = (import.meta.env.VITE_OCR_API_BASE as string | undefined)?.trim()
@@ -39,12 +41,19 @@ async function prepareUpload(file: File): Promise<{ blob: Blob; previewUrl: stri
   const bitmap = await createImageBitmap(file)
   try {
     const maxSide = Math.max(bitmap.width, bitmap.height)
-    const needsResize = maxSide > CLIENT_MAX_SIDE || file.size > MAX_UPLOAD_BYTES
-    if (!needsResize) return { blob: file, previewUrl }
-
     const scale = Math.min(1, CLIENT_MAX_SIDE / maxSide)
     const w = Math.max(1, Math.round(bitmap.width * scale))
     const h = Math.max(1, Math.round(bitmap.height * scale))
+    // PNG 截图即便不大也转 JPEG，上传更快
+    const shouldReencode =
+      scale < 1 ||
+      file.size > 450_000 ||
+      !/^image\/jpe?g$/i.test(file.type)
+
+    if (!shouldReencode && file.size <= MAX_UPLOAD_BYTES) {
+      return { blob: file, previewUrl }
+    }
+
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
@@ -54,7 +63,7 @@ async function prepareUpload(file: File): Promise<{ blob: Blob; previewUrl: stri
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(bitmap, 0, 0, w, h)
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92),
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', JPEG_QUALITY),
     )
     return { blob: blob ?? file, previewUrl }
   } finally {

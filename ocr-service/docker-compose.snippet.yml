@@ -8,8 +8,10 @@
     environment:
       OCR_CORS_ORIGINS: "https://saltedfish20060409.github.io,http://localhost:5173,http://127.0.0.1:5173"
       OCR_MAX_BYTES: "8388608"
-      OCR_MAX_SIDE: "2048"
+      OCR_MAX_SIDE: "1440"
       OCR_RATE_LIMIT: "20/minute"
+      OCR_DET_MODEL: "PP-OCRv5_mobile_det"
+      OCR_REC_MODEL: "PP-OCRv4_server_rec_doc"
       PADDLE_PDX_CACHE_HOME: /models
     volumes:
       - fan_lottery_ocr_models:/models

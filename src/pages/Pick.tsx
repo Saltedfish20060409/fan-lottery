@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { isNicknameCandidate } from '../lib/nickname'
+import { isTappableOcrBox } from '../lib/nickname'
 import { useLottery } from '../store/LotteryContext'
 
 export function Pick() {
@@ -31,13 +31,8 @@ export function Pick() {
     nav('/review')
   }
 
-  // 默认只露出「像昵称」的左栏短框；正文类一律隐藏，减少误点
-  const tappable = page.boxes.filter((b) => {
-    if (b.selected || b.suggested) return true
-    if (!isNicknameCandidate(b.text)) return false
-    const w = b.maxX - b.minX
-    return b.minX < 0.48 && w < 0.4 && b.text.length <= 10
-  })
+  // 布局优先：左栏可点选；英文长昵称允许更宽
+  const tappable = page.boxes.filter((b) => isTappableOcrBox(b))
 
   return (
     <Layout
@@ -81,7 +76,7 @@ export function Pick() {
       }
     >
       <p>
-        绿色是自动猜的昵称（已尽量避开评论正文）。点错取消，漏了点头像旁名字。下一页可改字；生僻字若缺字，对照截图手改即可。
+        绿色是按位置自动猜的昵称。点错取消；漏了就点头像旁的名字（数字/字母昵称也可以）。下一页可改字。
       </p>
 
       <div className="picker-frame">
