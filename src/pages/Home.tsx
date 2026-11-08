@@ -2,30 +2,29 @@ import { Link } from 'react-router-dom'
 
 export function Home() {
   return (
-    <div className="app-shell">
-      <div className="card stack" style={{ marginTop: 24, textAlign: 'center', padding: 28 }}>
-        <div className="hero-mark" style={{ margin: '0 auto 8px' }}>
-          抽
-        </div>
-        <h1 style={{ fontSize: '2rem' }}>粉丝橱窗抽奖</h1>
-        <p>
-          把评论区截图传上来，自动识别昵称，再用轮盘、扭蛋等方式公平抽取福利名额。
+    <div className="app-shell home-shell">
+      <div className="home-hero card stack">
+        <div className="hero-mark home-mark">抽</div>
+        <p className="home-brand display">粉丝橱窗抽奖</p>
+        <p className="home-lead">
+          截图识别昵称，轮盘扭蛋公平开抽——给粉丝的福利，认真又好玩。
         </p>
-        <p className="muted" style={{ fontSize: '0.88rem' }}>
-          截图只在你手机本地识别，不会上传到服务器。
-        </p>
-        <Link className="btn btn-primary btn-block" to="/setup" style={{ marginTop: 12 }}>
+        <Link className="btn btn-primary btn-block home-cta" to="/setup">
           开始抽奖
         </Link>
-        <div className="stack" style={{ textAlign: 'left', marginTop: 8 }}>
-          <div className="chip">① 填自己的昵称</div>
-          <div className="chip">② 上传评论截图</div>
-          <div className="chip">③ 在图上点出昵称再抽</div>
-        </div>
+        <ol className="home-steps">
+          <li>
+            <span className="num">1</span>填自己的昵称，避免抽到本人
+          </li>
+          <li>
+            <span className="num">2</span>上传评论截图或粘贴名单
+          </li>
+          <li>
+            <span className="num">3</span>点选确认后，选个玩法开抽
+          </li>
+        </ol>
       </div>
-      <p className="muted" style={{ textAlign: 'center', fontSize: '0.85rem' }}>
-        建议用手机浏览器打开，可「添加到主屏幕」方便下次使用
-      </p>
+      <p className="muted home-foot">可添加到主屏幕，下次开橱窗更方便</p>
     </div>
   )
 }

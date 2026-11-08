@@ -14,32 +14,24 @@ export function Layout({
 }) {
   return (
     <div className="app-shell">
-      <header className="row" style={{ justifyContent: 'space-between' }}>
-        <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className="row" style={{ gap: 10 }}>
-            <div className="hero-mark" style={{ width: 44, height: 44, fontSize: '1.2rem', borderRadius: 14 }}>
-              抽
-            </div>
-            <div>
-              <div className="display" style={{ fontSize: '1.1rem' }}>
-                粉丝橱窗抽奖
-              </div>
-              <div className="muted" style={{ fontSize: '0.8rem' }}>
-                手机也能公平抽粉丝福利
-              </div>
-            </div>
+      <header className="app-header">
+        <Link to="/" className="brand-link">
+          <div className="hero-mark brand-mark">抽</div>
+          <div>
+            <div className="display brand-title">粉丝橱窗抽奖</div>
+            <div className="muted brand-sub">公平 · 好玩 · 本机保存</div>
           </div>
         </Link>
       </header>
 
       {typeof step === 'number' && <StepBar current={step} />}
 
-      <main className="card stack">
-        <h1 style={{ fontSize: '1.6rem' }}>{title}</h1>
+      <main className="card stack main-card">
+        <h1 className="page-title">{title}</h1>
         {children}
       </main>
 
-      {footer && <div className="stack">{footer}</div>}
+      {footer && <div className="stack footer-actions">{footer}</div>}
     </div>
   )
 }

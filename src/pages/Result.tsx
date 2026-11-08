@@ -125,7 +125,10 @@ export function Result() {
             </div>
             {latest?.drawId && (
               <div className="muted" style={{ marginTop: 8, fontSize: '0.85rem' }}>
-                开奖编号 {latest.drawId} · {MODE_LABELS[latest.mode]}
+                {MODE_LABELS[latest.mode]} · 开奖编号 {latest.drawId}
+                <div style={{ marginTop: 4, fontSize: '0.8rem' }}>
+                  编号会写进公示文案，方便粉丝核对「是不是同一轮开奖」；日常可忽略。
+                </div>
               </div>
             )}
           </div>

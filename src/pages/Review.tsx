@@ -17,8 +17,6 @@ export function Review() {
     addManual,
     pool,
     drawCount,
-    artistNames,
-    refilterArtists,
   } = useLottery()
   const [manual, setManual] = useState('')
   const [batchPlatform, setBatchPlatform] = useState<SourcePlatform>('unknown')
@@ -61,16 +59,6 @@ export function Review() {
       <div className="row">
         <span className="chip">已选 {pool.length}</span>
         <span className="chip">合计 {candidates.length}</span>
-        {(artistNames.bilibili || artistNames.xiaohongshu || artistNames.douyin) && (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ minHeight: 36, padding: '6px 12px' }}
-            onClick={refilterArtists}
-          >
-            再排除本人
-          </button>
-        )}
       </div>
 
       <div className="row">
