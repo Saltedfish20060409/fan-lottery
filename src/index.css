@@ -264,6 +264,11 @@ p {
   accent-color: var(--accent);
 }
 
+.list-item input:not([type='checkbox']),
+.chip {
+  font-family: var(--font-cjk);
+}
+
 .mode-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
