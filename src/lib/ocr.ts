@@ -21,9 +21,58 @@ export interface OcrPageResult {
 }
 
 let ocrPromise: Promise<PaddleOCRInstance> | null = null
+let cachedMaxSide: number | null = null
 
-/** Longest side for OCR — phone screenshots are often 2000–4000px and crush WASM */
-const OCR_MAX_SIDE = 1280
+/**
+ * Pick OCR longest-side budget from device hints.
+ * Biased toward 更稳更快: weak phones get stronger downscale.
+ */
+export function getOcrMaxSide(): number {
+  if (cachedMaxSide != null) return cachedMaxSide
+
+  const nav = navigator as Navigator & {
+    deviceMemory?: number
+    connection?: { saveData?: boolean; effectiveType?: string }
+  }
+  const cores = nav.hardwareConcurrency || 2
+  const mem = nav.deviceMemory // GiB, Chrome only; undefined elsewhere
+  const ua = nav.userAgent || ''
+  const isMobile =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
+    (nav.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900)
+  const saveData = Boolean(nav.connection?.saveData)
+  const slowNet = /2g|slow-2g|3g/i.test(nav.connection?.effectiveType || '')
+
+  // Score: higher = stronger device
+  let score = 0
+  if (cores >= 8) score += 3
+  else if (cores >= 6) score += 2
+  else if (cores >= 4) score += 1
+
+  if (mem != null) {
+    if (mem >= 8) score += 3
+    else if (mem >= 4) score += 2
+    else if (mem >= 2) score += 0
+    else score -= 2
+  } else if (isMobile) {
+    score -= 1 // unknown memory on phone → be conservative
+  } else {
+    score += 1 // desktop without deviceMemory still usually OK
+  }
+
+  if (isMobile) score -= 2
+  if (saveData || slowNet) score -= 2
+
+  // Prefer speed/stability over max fidelity
+  let maxSide: number
+  if (score <= 0) maxSide = 960
+  else if (score <= 2) maxSide = 1120
+  else if (score <= 4) maxSide = 1280
+  else maxSide = 1440
+
+  cachedMaxSide = maxSide
+  return maxSide
+}
 
 /**
  * Resolve static asset URLs against the *page* (index.html), not the JS chunk.
@@ -43,24 +92,28 @@ function publicUrl(path: string): string {
 async function downscaleForOcr(file: File): Promise<{
   input: Blob | HTMLCanvasElement
   previewUrl: string
+  maxSide: number
 }> {
   const previewUrl = URL.createObjectURL(file)
+  const limit = getOcrMaxSide()
   const bitmap = await createImageBitmap(file)
   try {
     const maxSide = Math.max(bitmap.width, bitmap.height)
-    if (maxSide <= OCR_MAX_SIDE) {
-      return { input: file, previewUrl }
+    if (maxSide <= limit) {
+      return { input: file, previewUrl, maxSide: limit }
     }
-    const scale = OCR_MAX_SIDE / maxSide
+    const scale = limit / maxSide
     const w = Math.max(1, Math.round(bitmap.width * scale))
     const h = Math.max(1, Math.round(bitmap.height * scale))
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
     const ctx = canvas.getContext('2d')
-    if (!ctx) return { input: file, previewUrl }
+    if (!ctx) return { input: file, previewUrl, maxSide: limit }
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(bitmap, 0, 0, w, h)
-    return { input: canvas, previewUrl }
+    return { input: canvas, previewUrl, maxSide: limit }
   } finally {
     bitmap.close()
   }
@@ -139,9 +192,9 @@ export async function recognizePagesFromFiles(
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]!
-    onProgress?.(`正在压缩第 ${i + 1}/${files.length} 张…`)
-    const { input, previewUrl } = await downscaleForOcr(file)
-    onProgress?.(`正在识别第 ${i + 1}/${files.length} 张…`)
+    onProgress?.(`正在按设备性能压缩第 ${i + 1}/${files.length} 张…`)
+    const { input, previewUrl, maxSide } = await downscaleForOcr(file)
+    onProgress?.(`正在识别第 ${i + 1}/${files.length} 张（最长边≤${maxSide}px）…`)
     const [result] = await ocr.predict(input)
     if (!result) {
       URL.revokeObjectURL(previewUrl)
