@@ -1,7 +1,7 @@
 import { buildOcrBoxes, type OcrBox, type OcrLine } from './nickname'
 
 type PaddleOCRInstance = {
-  predict: (input: Blob | File) => Promise<
+  predict: (input: Blob | File | HTMLCanvasElement) => Promise<
     Array<{
       image: { width: number; height: number }
       items: Array<{
@@ -22,6 +22,9 @@ export interface OcrPageResult {
 
 let ocrPromise: Promise<PaddleOCRInstance> | null = null
 
+/** Longest side for OCR — phone screenshots are often 2000–4000px and crush WASM */
+const OCR_MAX_SIDE = 1280
+
 /**
  * Resolve static asset URLs against the *page* (index.html), not the JS chunk.
  * With Vite `base: './'`, a bare `./ort/` would wrongly resolve to `/assets/ort/`
@@ -30,11 +33,37 @@ let ocrPromise: Promise<PaddleOCRInstance> | null = null
 function publicUrl(path: string): string {
   const clean = path.replace(/^\//, '')
   const { origin, pathname } = window.location
-  // HashRouter: pathname is like /fan-lottery/ or /fan-lottery/index.html
   const dir = pathname.endsWith('/')
     ? pathname
     : pathname.replace(/\/[^/]*$/, '/')
   return new URL(clean, `${origin}${dir}`).href
+}
+
+/** Shrink huge screenshots before OCR to keep mobile WASM usable */
+async function downscaleForOcr(file: File): Promise<{
+  input: Blob | HTMLCanvasElement
+  previewUrl: string
+}> {
+  const previewUrl = URL.createObjectURL(file)
+  const bitmap = await createImageBitmap(file)
+  try {
+    const maxSide = Math.max(bitmap.width, bitmap.height)
+    if (maxSide <= OCR_MAX_SIDE) {
+      return { input: file, previewUrl }
+    }
+    const scale = OCR_MAX_SIDE / maxSide
+    const w = Math.max(1, Math.round(bitmap.width * scale))
+    const h = Math.max(1, Math.round(bitmap.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return { input: file, previewUrl }
+    ctx.drawImage(bitmap, 0, 0, w, h)
+    return { input: canvas, previewUrl }
+  } finally {
+    bitmap.close()
+  }
 }
 
 export async function getOcr(
@@ -42,9 +71,9 @@ export async function getOcr(
 ): Promise<PaddleOCRInstance> {
   if (!ocrPromise) {
     ocrPromise = (async () => {
-      onProgress?.('正在加载识别引擎…')
+      onProgress?.('正在加载识别引擎（手机上首次可能要一两分钟，请勿离开）…')
       const { PaddleOCR } = await import('@paddleocr/paddleocr-js')
-      onProgress?.('正在加载本地中文模型…')
+      onProgress?.('正在初始化中文模型（首次较慢，请耐心等待）…')
 
       const ocr = await PaddleOCR.create({
         lang: 'ch',
@@ -71,6 +100,11 @@ export async function getOcr(
     })
   }
   return ocrPromise
+}
+
+/** Warm up engine on the import page so upload doesn't hit cold start */
+export function preloadOcr(onProgress?: (msg: string) => void): Promise<void> {
+  return getOcr(onProgress).then(() => undefined)
 }
 
 function polyBounds(
@@ -105,9 +139,14 @@ export async function recognizePagesFromFiles(
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]!
+    onProgress?.(`正在压缩第 ${i + 1}/${files.length} 张…`)
+    const { input, previewUrl } = await downscaleForOcr(file)
     onProgress?.(`正在识别第 ${i + 1}/${files.length} 张…`)
-    const [result] = await ocr.predict(file)
-    if (!result) continue
+    const [result] = await ocr.predict(input)
+    if (!result) {
+      URL.revokeObjectURL(previewUrl)
+      continue
+    }
     const { width, height } = result.image
     const lines: OcrLine[] = []
 
@@ -128,7 +167,7 @@ export async function recognizePagesFromFiles(
     pages.push({
       id: `page-${Date.now()}-${i}`,
       fileName: file.name,
-      imageUrl: URL.createObjectURL(file),
+      imageUrl: previewUrl,
       boxes: buildOcrBoxes(lines),
     })
   }

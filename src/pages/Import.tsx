@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { recognizePagesFromFiles } from '../lib/ocr'
+import { preloadOcr, recognizePagesFromFiles } from '../lib/ocr'
 import { useLottery } from '../store/LotteryContext'
 
 export function Import() {
@@ -9,9 +9,36 @@ export function Import() {
   const { setOcrPages, addFromPaste, candidates, ocrPages } = useLottery()
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  const [engineReady, setEngineReady] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
   const [paste, setPaste] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setProgress('正在预加载识别引擎（首次约 1～3 分钟，可先截好图）…')
+    void preloadOcr((msg) => {
+      if (!cancelled) setProgress(msg)
+    })
+      .then(() => {
+        if (cancelled) return
+        setEngineReady(true)
+        setProgress('引擎已就绪，可以上传截图了')
+      })
+      .catch((e) => {
+        if (cancelled) return
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(
+          /timed out/i.test(msg)
+            ? '识别引擎初始化超时：手机性能不足或网络较慢。请换电脑/平板 Chrome 再试，或改用下方粘贴昵称。'
+            : `引擎预加载失败：${msg}`,
+        )
+        setProgress('')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return
@@ -38,11 +65,15 @@ export function Import() {
     } catch (e) {
       console.error(e)
       const msg = e instanceof Error ? e.message : String(e)
-      const wasmHint =
-        /wasm|backend|initWasm/i.test(msg)
-          ? '（识别引擎加载失败：请硬刷新页面后再试；仍不行可用下方粘贴昵称）'
-          : ''
-      setError(`识别失败：${msg}${wasmHint}`)
+      if (/timed out/i.test(msg)) {
+        setError(
+          '识别引擎初始化超时（手机跑 WASM 较慢）。请保持页面打开多等一会再试，或改用电脑/平板 Chrome；也可直接粘贴昵称。',
+        )
+      } else if (/wasm|backend|initWasm/i.test(msg)) {
+        setError(`识别失败：${msg}（请硬刷新后再试；仍不行可用下方粘贴昵称）`)
+      } else {
+        setError(`识别失败：${msg}`)
+      }
     } finally {
       setBusy(false)
     }
@@ -89,19 +120,25 @@ export function Import() {
         className="upload-zone"
         role="button"
         tabIndex={0}
-        onClick={() => !busy && inputRef.current?.click()}
+        onClick={() => !busy && engineReady && inputRef.current?.click()}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
+          if ((e.key === 'Enter' || e.key === ' ') && engineReady && !busy) {
+            inputRef.current?.click()
+          }
         }}
+        style={{ opacity: engineReady ? 1 : 0.65 }}
       >
-        <strong>{busy ? '识别中…' : '点这里选截图'}</strong>
-        <span className="muted">识别后会让你在图上点出昵称，不用自己从正文里挑</span>
+        <strong>
+          {busy ? '识别中…' : engineReady ? '点这里选截图' : '引擎加载中，请稍候…'}
+        </strong>
+        <span className="muted">识别后会让你在图上点出昵称；手机首次加载会较慢</span>
         <input
           ref={inputRef}
           type="file"
           accept="image/*"
           multiple
           hidden
+          disabled={!engineReady || busy}
           onChange={(e) => void onFiles(e.target.files)}
         />
       </div>
