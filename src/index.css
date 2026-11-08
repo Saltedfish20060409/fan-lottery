@@ -42,35 +42,35 @@ body,
 body {
   margin: 0;
   background-color: var(--art-canvas);
-  /* 默认手机：铺满，角色锚在偏下 */
+  /* 手机：放大人物，略偏下 */
   background-image: var(--bg-art);
   background-repeat: no-repeat;
   background-attachment: fixed;
-  background-size: cover;
-  background-position: center 72%;
+  background-size: auto 165%;
+  background-position: center 88%;
 }
 
-/* 平板：略上移焦点，人物更大一块落在中下 */
+/* 平板 */
 @media (min-width: 720px) {
   body {
-    background-size: cover;
-    background-position: center 68%;
+    background-size: auto 158%;
+    background-position: center 86%;
   }
 }
 
-/* 电脑：放大人物区域，可裁掉上下多余灰底 */
+/* 电脑 */
 @media (min-width: 1024px) {
   body {
-    background-size: auto 138%;
-    background-position: center 82%;
+    background-size: auto 168%;
+    background-position: center 88%;
   }
 }
 
-/* 超宽屏：再放大一点，焦点锁在小人 */
+/* 超宽屏 */
 @media (min-width: 1440px) {
   body {
-    background-size: auto 155%;
-    background-position: center 80%;
+    background-size: auto 180%;
+    background-position: center 86%;
   }
 }
 
