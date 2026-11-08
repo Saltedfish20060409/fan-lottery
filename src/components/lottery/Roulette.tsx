@@ -65,7 +65,11 @@ export function Roulette({
     // Pointer at top; sector mid should land under pointer
     const extra = 360 * 5
     const target = extra + (360 - (targetIndex * sliceDeg + sliceDeg / 2))
-    setRotation((r) => r + target)
+    // 等浏览器先应用 transition，再改角度，避免首点无动画
+    const id = window.requestAnimationFrame(() => {
+      setRotation((r) => r + target)
+    })
+    return () => window.cancelAnimationFrame(id)
   }, [spinning, winners, labels, sliceDeg])
 
   return (

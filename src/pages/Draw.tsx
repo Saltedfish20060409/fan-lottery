@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { Cards } from '../components/lottery/Cards'
@@ -18,25 +18,35 @@ export function Draw() {
   const [roundWinners, setRoundWinners] = useState<string[]>([])
   const [stagePool, setStagePool] = useState<string[]>([])
   const [done, setDone] = useState(false)
+  const spinTimer = useRef<number | null>(null)
 
   const available = pool.filter((n) => !winners.includes(n))
   const displayPool = stagePool.length ? stagePool : available.length ? available : pool
   const canDraw = available.length > 0 && !spinning
 
+  useEffect(() => {
+    return () => {
+      if (spinTimer.current !== null) window.clearTimeout(spinTimer.current)
+    }
+  }, [])
+
   const start = () => {
     if (!canDraw) return
     const snapshot = [...available]
-    setStagePool(snapshot)
     const picked = runDraw()
     if (!picked.length) return
+
+    if (spinTimer.current !== null) window.clearTimeout(spinTimer.current)
+    setStagePool(snapshot)
     setRoundWinners(picked)
     setDone(false)
     setSpinning(true)
     const ms =
       mode === 'roulette' ? 4200 : mode === 'slot' ? 2400 : mode === 'cards' ? 2000 : 1800
-    window.setTimeout(() => {
+    spinTimer.current = window.setTimeout(() => {
       setSpinning(false)
       setDone(true)
+      spinTimer.current = null
     }, ms)
   }
 

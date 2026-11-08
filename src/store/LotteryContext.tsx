@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -58,6 +59,8 @@ const LotteryContext = createContext<LotteryContextValue | null>(null)
 export function LotteryProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(() => loadState())
   const [ocrPages, setOcrPagesState] = useState<OcrPageResult[]>([])
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   useEffect(() => {
     saveState(state)
@@ -210,27 +213,29 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const runDraw = useCallback(() => {
-    let winners: string[] = []
-    setState((s) => {
-      const pool = selectedPool(s.candidates).filter((n) => !s.winners.includes(n))
-      winners = pickWinners(pool, s.drawCount)
-      const record: LotteryRecord = {
-        id: `${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        mode: s.mode,
-        winners,
-        poolSize: pool.length,
-        drawCount: s.drawCount,
-      }
-      return {
-        ...s,
-        winners: [...s.winners, ...winners],
-        records: appendRecord(s.records, record),
-        candidates: s.candidates.map((c) =>
-          winners.includes(c.name) ? { ...c, selected: false } : c,
-        ),
-      }
-    })
+    // 必须在 setState 外抽签：React 19 下 updater 不一定同步执行，
+    // 以前在回调里赋值再 return，经常拿到 []，导致首点无动画、二点又抽一次。
+    const s = stateRef.current
+    const pool = selectedPool(s.candidates).filter((n) => !s.winners.includes(n))
+    const winners = pickWinners(pool, s.drawCount)
+    if (!winners.length) return []
+
+    const record: LotteryRecord = {
+      id: `${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      mode: s.mode,
+      winners,
+      poolSize: pool.length,
+      drawCount: s.drawCount,
+    }
+    setState((prev) => ({
+      ...prev,
+      winners: [...prev.winners, ...winners],
+      records: appendRecord(prev.records, record),
+      candidates: prev.candidates.map((c) =>
+        winners.includes(c.name) ? { ...c, selected: false } : c,
+      ),
+    }))
     return winners
   }, [])
 
