@@ -1,0 +1,46 @@
+[
+  {
+    "id": "suffix-lv",
+    "raw": "小明Lv6",
+    "expectText": "小明",
+    "expectKeepAuthor": false,
+    "category": "suffix"
+  },
+  {
+    "id": "suffix-junk-g",
+    "raw": "花开G",
+    "expectText": "花开",
+    "category": "suffix"
+  },
+  {
+    "id": "suffix-keep-author",
+    "raw": "超级作者",
+    "expectText": "超级作者",
+    "category": "suffix"
+  },
+  {
+    "id": "suffix-keep-88",
+    "raw": "粉丝88",
+    "expectText": "粉丝88",
+    "category": "suffix"
+  },
+  {
+    "id": "body-hahaha",
+    "raw": "哈哈哈好耶",
+    "expectIsBodyLike": true,
+    "category": "body"
+  },
+  {
+    "id": "body-punct",
+    "raw": "画得真好看！",
+    "expectIsBodyLike": true,
+    "category": "body"
+  },
+  {
+    "id": "rare-placeholder",
+    "raw": "寘诚",
+    "expectText": "寘诚",
+    "category": "rare",
+    "note": "服务端 medium 模型应尽量保住非常用字；本用例测清洗不误伤"
+  }
+]

@@ -1,18 +1,5 @@
 import { buildOcrBoxes, type OcrBox, type OcrLine } from './nickname'
 
-type PaddleOCRInstance = {
-  predict: (input: Blob | File | HTMLCanvasElement) => Promise<
-    Array<{
-      image: { width: number; height: number }
-      items: Array<{
-        text: string
-        score: number
-        poly: Array<{ x: number; y: number } | number[]>
-      }>
-    }>
-  >
-}
-
 export interface OcrPageResult {
   id: string
   fileName: string
@@ -20,167 +7,160 @@ export interface OcrPageResult {
   boxes: OcrBox[]
 }
 
-let ocrPromise: Promise<PaddleOCRInstance> | null = null
-let cachedMaxSide: number | null = null
-
-/**
- * Pick OCR longest-side budget from device hints.
- * Biased toward 更稳更快: weak phones get stronger downscale.
- */
-export function getOcrMaxSide(): number {
-  if (cachedMaxSide != null) return cachedMaxSide
-
-  const nav = navigator as Navigator & {
-    deviceMemory?: number
-    connection?: { saveData?: boolean; effectiveType?: string }
-  }
-  const cores = nav.hardwareConcurrency || 2
-  const mem = nav.deviceMemory // GiB, Chrome only; undefined elsewhere
-  const ua = nav.userAgent || ''
-  const isMobile =
-    /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
-    (nav.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900)
-  const saveData = Boolean(nav.connection?.saveData)
-  const slowNet = /2g|slow-2g|3g/i.test(nav.connection?.effectiveType || '')
-
-  // Score: higher = stronger device
-  let score = 0
-  if (cores >= 8) score += 3
-  else if (cores >= 6) score += 2
-  else if (cores >= 4) score += 1
-
-  if (mem != null) {
-    if (mem >= 8) score += 3
-    else if (mem >= 4) score += 2
-    else if (mem >= 2) score += 0
-    else score -= 2
-  } else if (isMobile) {
-    score -= 1 // unknown memory on phone → be conservative
-  } else {
-    score += 1 // desktop without deviceMemory still usually OK
-  }
-
-  if (isMobile) score -= 2
-  if (saveData || slowNet) score -= 2
-
-  // Prefer speed/stability, but keep enough resolution for uncommon glyphs
-  let maxSide: number
-  if (score <= 0) maxSide = 1120
-  else if (score <= 2) maxSide = 1280
-  else if (score <= 4) maxSide = 1440
-  else maxSide = 1600
-
-  cachedMaxSide = maxSide
-  return maxSide
+type ServerOcrItem = {
+  text: string
+  rawText?: string
+  strippedSuffix?: string | null
+  score: number
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
 }
 
-/**
- * Resolve static asset URLs against the *page* (index.html), not the JS chunk.
- * With Vite `base: './'`, a bare `./ort/` would wrongly resolve to `/assets/ort/`
- * when ORT loads from a module under `/assets/`.
- */
-function publicUrl(path: string): string {
-  const clean = path.replace(/^\//, '')
-  const { origin, pathname } = window.location
-  const dir = pathname.endsWith('/')
-    ? pathname
-    : pathname.replace(/\/[^/]*$/, '/')
-  return new URL(clean, `${origin}${dir}`).href
+type ServerOcrResponse = {
+  width: number
+  height: number
+  elapsedMs?: number
+  items: ServerOcrItem[]
 }
 
-/** Shrink huge screenshots before OCR to keep mobile WASM usable */
-async function downscaleForOcr(file: File): Promise<{
-  input: Blob | HTMLCanvasElement
-  previewUrl: string
-  maxSide: number
-}> {
+const DEFAULT_API = 'https://vnscriptstudio.cn/fan-lottery-ocr'
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+const CLIENT_MAX_SIDE = 2048
+
+function apiBase(): string {
+  const raw = (import.meta.env.VITE_OCR_API_BASE as string | undefined)?.trim()
+  return (raw || DEFAULT_API).replace(/\/$/, '')
+}
+
+async function prepareUpload(file: File): Promise<{ blob: Blob; previewUrl: string }> {
   const previewUrl = URL.createObjectURL(file)
-  const limit = getOcrMaxSide()
   const bitmap = await createImageBitmap(file)
   try {
     const maxSide = Math.max(bitmap.width, bitmap.height)
-    if (maxSide <= limit) {
-      return { input: file, previewUrl, maxSide: limit }
-    }
-    const scale = limit / maxSide
+    const needsResize = maxSide > CLIENT_MAX_SIDE || file.size > MAX_UPLOAD_BYTES
+    if (!needsResize) return { blob: file, previewUrl }
+
+    const scale = Math.min(1, CLIENT_MAX_SIDE / maxSide)
     const w = Math.max(1, Math.round(bitmap.width * scale))
     const h = Math.max(1, Math.round(bitmap.height * scale))
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
     const ctx = canvas.getContext('2d')
-    if (!ctx) return { input: file, previewUrl, maxSide: limit }
+    if (!ctx) return { blob: file, previewUrl }
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(bitmap, 0, 0, w, h)
-    return { input: canvas, previewUrl, maxSide: limit }
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92),
+    )
+    return { blob: blob ?? file, previewUrl }
   } finally {
     bitmap.close()
   }
 }
 
-export async function getOcr(
-  onProgress?: (msg: string) => void,
-): Promise<PaddleOCRInstance> {
-  if (!ocrPromise) {
-    ocrPromise = (async () => {
-      onProgress?.('正在加载识别引擎（手机上首次可能要一两分钟，请勿离开）…')
-      const { PaddleOCR } = await import('@paddleocr/paddleocr-js')
-      onProgress?.('正在初始化中文模型（首次较慢，请耐心等待）…')
-
-      // det 继续用 tiny 保体积；rec 用 small，字表更大，生僻字更稳
-      const ocr = await PaddleOCR.create({
-        lang: 'ch',
-        textDetectionModelName: 'PP-OCRv6_tiny_det',
-        textRecognitionModelName: 'PP-OCRv6_small_rec',
-        textDetectionModelAsset: {
-          url: publicUrl('models/PP-OCRv6_tiny_det_onnx_infer.tar'),
-        },
-        textRecognitionModelAsset: {
-          url: publicUrl('models/PP-OCRv6_small_rec_onnx_infer.tar'),
-        },
-        ortOptions: {
-          backend: 'wasm',
-          wasmPaths: publicUrl('ort/'),
-          numThreads: 1,
-          simd: true,
-        },
-      })
-      onProgress?.('识别引擎就绪')
-      return ocr as PaddleOCRInstance
-    })().catch((err) => {
-      ocrPromise = null
-      throw err
-    })
+function mergeServerMeta(boxes: OcrBox[], items: ServerOcrItem[]): OcrBox[] {
+  const byRaw = new Map<string, ServerOcrItem>()
+  for (const it of items) {
+    const key = (it.rawText || it.text).replace(/\s+/g, '')
+    if (key) byRaw.set(key, it)
   }
-  return ocrPromise
-}
 
-/** Warm up engine on the import page so upload doesn't hit cold start */
-export function preloadOcr(onProgress?: (msg: string) => void): Promise<void> {
-  return getOcr(onProgress).then(() => undefined)
-}
-
-function polyBounds(
-  poly: Array<{ x: number; y: number } | number[]>,
-): { minX: number; maxX: number; minY: number; maxY: number } | null {
-  const xs: number[] = []
-  const ys: number[] = []
-  for (const p of poly) {
-    if (Array.isArray(p)) {
-      xs.push(Number(p[0]))
-      ys.push(Number(p[1]))
-    } else {
-      xs.push(p.x)
-      ys.push(p.y)
+  return boxes.map((box) => {
+    const hit = byRaw.get(box.rawText) || byRaw.get(box.text)
+    if (!hit) {
+      // No server meta: keep layout suggestion only if score already high
+      const ok = box.score >= 0.7
+      return {
+        ...box,
+        suggested: box.suggested && ok,
+        selected: box.selected && ok,
+      }
     }
+    const ok = hit.score >= 0.7
+    const suggested = box.suggested && ok
+    return {
+      ...box,
+      text: hit.text || box.text,
+      rawText: hit.rawText || box.rawText,
+      strippedSuffix: hit.strippedSuffix || undefined,
+      score: hit.score,
+      suggested,
+      selected: suggested,
+    }
+  })
+}
+
+async function recognizeOne(
+  file: File,
+  onProgress?: (msg: string) => void,
+): Promise<OcrPageResult | null> {
+  onProgress?.('正在压缩并上传截图（图不落盘）…')
+  const { blob, previewUrl } = await prepareUpload(file)
+  const form = new FormData()
+  form.append('file', blob, file.name || 'screenshot.jpg')
+
+  onProgress?.('正在服务端识别昵称…')
+  const res = await fetch(`${apiBase()}/recognize`, { method: 'POST', body: form })
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`
+    try {
+      const j = (await res.json()) as { detail?: string }
+      if (j.detail) detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)
+    } catch {
+      // ignore
+    }
+    URL.revokeObjectURL(previewUrl)
+    throw new Error(detail)
   }
-  if (!xs.length) return null
+
+  const data = (await res.json()) as ServerOcrResponse
+  const lines: OcrLine[] = (data.items || []).map((it) => ({
+    // Feed raw into layout cleaner so client heuristics still apply
+    text: it.rawText || it.text,
+    score: it.score,
+    minX: it.minX,
+    maxX: it.maxX,
+    minY: it.minY,
+    maxY: it.maxY,
+  }))
+
+  onProgress?.('正在从识别结果里挑昵称…')
+  const boxes = mergeServerMeta(buildOcrBoxes(lines), data.items || [])
+
   return {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xs),
-    minY: Math.min(...ys),
-    maxY: Math.max(...ys),
+    id: `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    fileName: file.name,
+    imageUrl: previewUrl,
+    boxes,
+  }
+}
+
+/** Health-check the OCR API (replaces WASM preload). */
+export async function preloadOcr(onProgress?: (msg: string) => void): Promise<void> {
+  onProgress?.('正在连接识别服务…')
+  const ctrl = new AbortController()
+  const timer = window.setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const res = await fetch(`${apiBase()}/health`, { signal: ctrl.signal })
+    if (!res.ok) throw new Error(`识别服务不可用（HTTP ${res.status}）`)
+    const j = (await res.json()) as { ok?: boolean; ocrReady?: boolean }
+    if (!j.ok) throw new Error('识别服务未就绪')
+    onProgress?.(
+      j.ocrReady
+        ? '识别服务已就绪，可以上传截图了'
+        : '识别服务已连接（模型可能仍在预热，首张会稍慢）',
+    )
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error('连接识别服务超时，请检查网络后重试，或改用下方粘贴昵称')
+    }
+    throw e
+  } finally {
+    window.clearTimeout(timer)
   }
 }
 
@@ -188,43 +168,11 @@ export async function recognizePagesFromFiles(
   files: File[],
   onProgress?: (msg: string) => void,
 ): Promise<OcrPageResult[]> {
-  const ocr = await getOcr(onProgress)
   const pages: OcrPageResult[] = []
-
   for (let i = 0; i < files.length; i++) {
-    const file = files[i]!
-    onProgress?.(`正在按设备性能压缩第 ${i + 1}/${files.length} 张…`)
-    const { input, previewUrl, maxSide } = await downscaleForOcr(file)
-    onProgress?.(`正在识别第 ${i + 1}/${files.length} 张（最长边≤${maxSide}px）…`)
-    const [result] = await ocr.predict(input)
-    if (!result) {
-      URL.revokeObjectURL(previewUrl)
-      continue
-    }
-    const { width, height } = result.image
-    const lines: OcrLine[] = []
-
-    for (const item of result.items) {
-      const bounds = polyBounds(item.poly)
-      if (!bounds || width <= 0 || height <= 0) continue
-      lines.push({
-        text: item.text,
-        score: item.score,
-        minX: bounds.minX / width,
-        maxX: bounds.maxX / width,
-        minY: bounds.minY / height,
-        maxY: bounds.maxY / height,
-      })
-    }
-
-    onProgress?.(`正在从第 ${i + 1} 张里挑昵称…`)
-    pages.push({
-      id: `page-${Date.now()}-${i}`,
-      fileName: file.name,
-      imageUrl: previewUrl,
-      boxes: buildOcrBoxes(lines),
-    })
+    onProgress?.(`正在识别第 ${i + 1}/${files.length} 张…`)
+    const page = await recognizeOne(files[i]!, onProgress)
+    if (page) pages.push(page)
   }
-
   return pages
 }

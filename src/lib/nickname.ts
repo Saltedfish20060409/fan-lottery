@@ -205,14 +205,19 @@ function looksLikeUiChrome(text: string): boolean {
 
 function looksLikeCommentBody(text: string): boolean {
   if (text.length > MAX_NICK_LEN) return true
-  if (text.length > 12 && /[，。！？、,.!?;；：:…]/.test(text)) return true
+  // Any sentence punctuation → almost certainly comment body
+  if (/[，。！？、,.!?;；：:…]/.test(text)) return true
   if (
-    /^(哈哈+|嘿嘿+|啊啊+|呜呜+|草+|好耶|冲了|冲鸭|支持|加油)/.test(text) &&
-    text.length >= 4
+    /^(哈哈+|嘿嘿+|啊啊+|呜呜+|草+|好耶|冲了|冲鸭|支持|加油|谢谢|喜欢|求抽|蹲一个)/.test(
+      text,
+    ) &&
+    text.length >= 3
   ) {
     return true
   }
   if (/^[\d\s\-_/\\.~·•★☆♥❤]+$/.test(text)) return true
+  // Long-ish lines without looking like a compact handle
+  if (text.length >= 12) return true
   return false
 }
 
@@ -238,7 +243,7 @@ export function suggestNicknamesFromLayout(lines: OcrLine[]): Set<string> {
       const cleaned = cleanOcrNickname(l.text)
       return { ...l, text: cleaned.text }
     })
-    .filter((l) => l.text && l.score >= 0.45)
+    .filter((l) => l.text && l.score >= 0.55)
     .sort((a, b) => a.minY - b.minY || a.minX - b.minX)
 
   if (!usable.length) return new Set()
@@ -271,17 +276,7 @@ export function suggestNicknamesFromLayout(lines: OcrLine[]): Set<string> {
     if (pick) suggested.add(pick)
   }
 
-  if (suggested.size === 0) {
-    for (const line of usable) {
-      if (!isNicknameCandidate(line.text)) continue
-      const width = line.maxX - line.minX
-      const cx = (line.minX + line.maxX) / 2
-      if (line.minX < 0.48 && cx < 0.5 && width < 0.45 && line.text.length <= 14) {
-        suggested.add(line.text)
-      }
-    }
-  }
-
+  // 宁可少自动勾选：无兜底扫全文，避免把短评正文勾进来
   return suggested
 }
 
@@ -297,24 +292,25 @@ function pickNicknameFromBlock(block: OcrLine[], rowGap: number): string | null 
   for (const line of topRow) {
     const text = normalizeName(line.text)
     if (!isNicknameCandidate(text)) continue
+    if (text.length > 12) continue
 
     const width = line.maxX - line.minX
     const cx = (line.minX + line.maxX) / 2
     let score = 0
 
-    if (text.length <= 10) score += 3
-    else if (text.length <= 14) score += 1
-    else score -= 1
+    if (text.length <= 8) score += 3
+    else if (text.length <= 12) score += 1
 
     if (line.minX >= 0.08 && line.minX <= 0.42) score += 3
-    else if (line.minX < 0.55) score += 1
+    else if (line.minX < 0.5) score += 1
+    else score -= 2
 
-    if (cx > 0.62) score -= 4
-    if (line.minX > 0.55) score -= 3
+    if (cx > 0.58) score -= 4
+    if (line.minX > 0.5) score -= 3
 
     if (width < 0.28) score += 2
-    else if (width < 0.4) score += 1
-    else if (width > 0.55) score -= 3
+    else if (width < 0.38) score += 1
+    else if (width > 0.5) score -= 4
 
     const below = content.some(
       (o) =>
@@ -322,32 +318,16 @@ function pickNicknameFromBlock(block: OcrLine[], rowGap: number): string | null 
         normalizeName(o.text).length >= Math.max(4, text.length) &&
         !looksLikeUiChrome(normalizeName(o.text)),
     )
-    if (below) score += 3
+    if (below) score += 4
+    else score -= 3
 
-    score += line.score >= 0.8 ? 1 : 0
+    score += line.score >= 0.85 ? 1 : 0
+    score += line.score < 0.7 ? -3 : 0
 
     if (!best || score > best.score) best = { text, score }
   }
 
-  if (!best || best.score < 3) {
-    const leftShort = content
-      .filter((l) => {
-        const t = normalizeName(l.text)
-        return (
-          isNicknameCandidate(t) &&
-          l.minX < 0.45 &&
-          l.maxX - l.minX < 0.42 &&
-          (l.minX + l.maxX) / 2 < 0.5
-        )
-      })
-      .sort((a, b) => a.minY - b.minY || a.minX - b.minX)[0]
-    if (leftShort) {
-      const t = normalizeName(leftShort.text)
-      if (!best || best.score < 3) best = { text: t, score: 3 }
-    }
-  }
-
-  return best && best.score >= 2 ? best.text : null
+  return best && best.score >= 5 ? best.text : null
 }
 
 /** Build tappable boxes with layout suggestions pre-selected */
