@@ -22,10 +22,19 @@ export interface OcrPageResult {
 
 let ocrPromise: Promise<PaddleOCRInstance> | null = null
 
+/**
+ * Resolve static asset URLs against the *page* (index.html), not the JS chunk.
+ * With Vite `base: './'`, a bare `./ort/` would wrongly resolve to `/assets/ort/`
+ * when ORT loads from a module under `/assets/`.
+ */
 function publicUrl(path: string): string {
-  const base = import.meta.env.BASE_URL || '/'
-  const normalized = base.endsWith('/') ? base : `${base}/`
-  return `${normalized}${path.replace(/^\//, '')}`
+  const clean = path.replace(/^\//, '')
+  const { origin, pathname } = window.location
+  // HashRouter: pathname is like /fan-lottery/ or /fan-lottery/index.html
+  const dir = pathname.endsWith('/')
+    ? pathname
+    : pathname.replace(/\/[^/]*$/, '/')
+  return new URL(clean, `${origin}${dir}`).href
 }
 
 export async function getOcr(
