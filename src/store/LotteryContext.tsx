@@ -50,6 +50,7 @@ interface LotteryContextValue extends AppState {
   refilterArtists: () => void
   runDraw: () => string[]
   clearWinners: () => void
+  clearHistory: () => void
   resetAll: () => void
   pool: string[]
 }
@@ -243,6 +244,10 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, winners: [] }))
   }, [])
 
+  const clearHistory = useCallback(() => {
+    setState((s) => ({ ...s, winners: [], records: [] }))
+  }, [])
+
   const resetAll = useCallback(() => {
     setOcrPages([])
     setState((s) => ({
@@ -276,6 +281,7 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       refilterArtists,
       runDraw,
       clearWinners,
+      clearHistory,
       resetAll,
       pool,
     }),
@@ -298,6 +304,7 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       refilterArtists,
       runDraw,
       clearWinners,
+      clearHistory,
       resetAll,
       pool,
     ],

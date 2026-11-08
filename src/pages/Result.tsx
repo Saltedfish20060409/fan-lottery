@@ -6,7 +6,8 @@ import { MODE_LABELS } from '../types'
 
 export function Result() {
   const nav = useNavigate()
-  const { winners, records, pool, clearWinners, resetAll, mode } = useLottery()
+  const { winners, records, pool, clearWinners, clearHistory, resetAll, mode } =
+    useLottery()
   const [copied, setCopied] = useState(false)
 
   const latest = records[0]
@@ -96,7 +97,21 @@ export function Result() {
 
       {records.length > 0 && (
         <div className="stack" style={{ marginTop: 8 }}>
-          <h2 style={{ fontSize: '1.1rem' }}>本机历史</h2>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>本机历史</h2>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: '6px 10px', fontSize: '0.85rem' }}
+              onClick={() => {
+                if (confirm('清空本机抽奖历史和当前中奖名单？名单池不会动。')) {
+                  clearHistory()
+                }
+              }}
+            >
+              清空历史
+            </button>
+          </div>
           {records.slice(0, 5).map((r) => (
             <div key={r.id} className="list-item" style={{ gridTemplateColumns: '1fr' }}>
               <div>
