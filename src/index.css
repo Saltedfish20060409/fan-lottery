@@ -431,6 +431,66 @@ p {
   font-family: var(--font-cjk);
 }
 
+.weight-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.weight-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.weight-btn {
+  appearance: none;
+  border: none;
+  background: rgba(33, 134, 122, 0.08);
+  color: var(--accent-deep);
+  width: 44px;
+  min-height: 44px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.weight-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.weight-btn:active:not(:disabled) {
+  background: rgba(33, 134, 122, 0.18);
+}
+
+.weight-input {
+  width: 52px;
+  min-height: 44px;
+  border: none;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  background: #fff;
+  padding: 0 4px;
+  border-radius: 0;
+  -moz-appearance: textfield;
+}
+
+.weight-input:focus {
+  outline: none;
+  background: #f3fbf9;
+}
+
 .mode-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

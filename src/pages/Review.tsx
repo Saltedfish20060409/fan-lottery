@@ -1,9 +1,83 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { looksLikeTrailingBadgeJunk } from '../lib/nickname'
 import { useLottery } from '../store/LotteryContext'
 import { PLATFORM_LABELS, type SourcePlatform } from '../types'
+
+function WeightControl({
+  name,
+  weight,
+  onChange,
+}: {
+  name: string
+  weight: number
+  onChange: (weight: number) => void
+}) {
+  const value = Math.max(1, weight || 1)
+  const [draft, setDraft] = useState(String(value))
+
+  useEffect(() => {
+    setDraft(String(value))
+  }, [value])
+
+  const commit = (raw: string) => {
+    const digits = raw.replace(/\D/g, '')
+    if (digits === '') {
+      setDraft('1')
+      onChange(1)
+      return
+    }
+    const n = Math.max(1, Math.min(999, Number.parseInt(digits, 10) || 1))
+    setDraft(String(n))
+    onChange(n)
+  }
+
+  return (
+    <div className="weight-row">
+      <span className="muted" style={{ fontSize: '0.8rem' }}>
+        权重
+      </span>
+      <div className="weight-stepper">
+        <button
+          type="button"
+          className="weight-btn"
+          aria-label={`减少 ${name} 的权重`}
+          disabled={value <= 1}
+          onClick={() => onChange(value - 1)}
+        >
+          −
+        </button>
+        <input
+          className="weight-input"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={draft}
+          aria-label={`${name} 的权重`}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => {
+            const next = e.target.value.replace(/\D/g, '')
+            setDraft(next)
+            if (next === '') return
+            const n = Number.parseInt(next, 10)
+            if (Number.isFinite(n) && n >= 1) onChange(Math.min(999, n))
+          }}
+          onBlur={() => commit(draft)}
+        />
+        <button
+          type="button"
+          className="weight-btn"
+          aria-label={`增加 ${name} 的权重`}
+          disabled={value >= 999}
+          onClick={() => onChange(Math.min(999, value + 1))}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function Review() {
   const nav = useNavigate()
@@ -145,28 +219,11 @@ export function Review() {
                     ? ' · 末尾字符可能是等级图标'
                     : ''}
               </div>
-              <div className="row" style={{ alignItems: 'center', marginTop: 4, gap: 8 }}>
-                <label className="muted" style={{ fontSize: '0.8rem' }}>
-                  权重
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={c.weight ?? 1}
-                  onChange={(e) =>
-                    updateCandidate(c.id, {
-                      weight: Math.max(1, Math.min(999, Math.floor(Number(e.target.value)) || 1)),
-                    })
-                  }
-                  style={{
-                    width: 64,
-                    border: '1px solid var(--line)',
-                    borderRadius: 10,
-                    padding: '4px 8px',
-                  }}
-                />
-              </div>
+              <WeightControl
+                name={c.name}
+                weight={c.weight ?? 1}
+                onChange={(weight) => updateCandidate(c.id, { weight })}
+              />
               {c.rawName && c.rawName !== c.name && (
                 <button
                   type="button"
