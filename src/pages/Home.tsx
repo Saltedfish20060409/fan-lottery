@@ -12,6 +12,9 @@ export function Home() {
         <Link className="btn btn-primary btn-block home-cta" to="/setup">
           开始抽奖
         </Link>
+        <Link className="btn btn-soft btn-block" to="/background">
+          背景设置
+        </Link>
         <ol className="home-steps">
           <li>
             <span className="num">1</span>填自己的昵称，避免抽到本人
